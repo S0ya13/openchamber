@@ -49,4 +49,6 @@ Non-user-visible child processes must never flash a console window.
 
 ## Validation
 
+Load `updater-testing` before judging any change to the update or quit/install sequence: that path cannot be verified by review or by unit tests, and a passing run on one platform says nothing about the others.
+
 Run focused Electron tests and package checks. For startup, preload, routing, or packaging changes, completion requires both HMR development and bundled UI validation. For Windows process work, completion requires inspection of the complete process tree with no console flash; command success alone is insufficient.
