@@ -3,7 +3,7 @@ import { spawn } from 'node:child_process';
 import fs from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
-import { test } from 'node:test';
+import { test } from 'vitest';
 import { shutdownTerminalProcesses } from './shutdown.js';
 
 const delay = ms => new Promise(resolve => setTimeout(resolve, ms));
@@ -29,7 +29,7 @@ async function fixture(t, mode) {
   const child = spawn(process.execPath, ['-e', source, file, mode], { detached: true, stdio: 'ignore' });
   const exit = new Promise(resolve => child.once('exit', (code, signal) => resolve({ code, signal })));
   const events = async () => { try { return (await fs.readFile(file, 'utf8')).trim().split('\n').map(line => JSON.parse(line)); } catch (error) { if (error.code === 'ENOENT') return []; throw error; } };
-  t.after(async () => {
+  t.onTestFinished(async () => {
     for (const pid of new Set([child.pid, ...(await events()).map(event => event.pid)])) {
       try { process.kill(pid, 'SIGKILL'); } catch { /* already exited */ }
     }
@@ -75,7 +75,7 @@ test('an idle shell closes promptly and shutdown waits for its exit', { skip: pr
   child.stdout.resume();
   child.stderr.resume();
   const exit = new Promise(resolve => child.once('exit', (code, signal) => resolve({ code, signal })));
-  t.after(async () => { child.kill('SIGKILL'); await exit; });
+  t.onTestFinished(async () => { child.kill('SIGKILL'); await exit; });
   await delay(100);
   const start = Date.now();
   await shutdownTerminalProcesses([{ process: { pid: child.pid, kill: signal => child.kill(signal) }, shellExecutable: '/bin/sh' }]);
