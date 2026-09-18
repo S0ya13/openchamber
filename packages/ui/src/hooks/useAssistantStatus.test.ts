@@ -86,16 +86,19 @@ describe('getActiveAssistantContext', () => {
         });
     });
 
-    test('shows no model while a prompt sent after a finished turn waits for its answer', () => {
-        // A v2 user message records no model, so the model of the turn about to
-        // run is unknown (the composer may have switched models, or be routing
-        // through Auto). Naming the previous turn's model would name the wrong one.
+    test('shows the session record model while a prompt sent after a finished turn waits for its answer', () => {
+        // A v2 user message records no model; the send switched the session
+        // first, so the session record names the model the new turn runs on.
         const previousAssistant = { ...assistantMessage('assistant_1', 'anthropic', 'claude-opus-4-1'), time: { created: 2, completed: 3 } };
+        const messages = [userMessage('user_1'), previousAssistant, userMessage('user_2')];
 
-        expect(getActiveAssistantContext([userMessage('user_1'), previousAssistant, userMessage('user_2')])).toEqual({
+        expect(getActiveAssistantContext(messages, { providerID: 'openai', id: 'gpt-5.6-sol' })).toEqual({
             assistantId: previousAssistant.id,
-            model: null,
+            model: { providerId: 'openai', modelId: 'gpt-5.6-sol' },
         });
+        // Without a session record nothing is shown: naming the previous turn's
+        // model would name the wrong one.
+        expect(getActiveAssistantContext(messages)).toEqual({ assistantId: previousAssistant.id, model: null });
     });
 
     test('a turn still running keeps its model when a prompt is queued behind it', () => {

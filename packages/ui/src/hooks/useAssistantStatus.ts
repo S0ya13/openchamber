@@ -1,10 +1,10 @@
 import React from 'react';
 import { useChatColumnSession } from '@/components/chat/chatColumnSession';
-import type { Message, Part, ReasoningPart, TextPart, ToolPart } from '@/lib/opencode/model';
+import type { Message, ModelRef, Part, ReasoningPart, TextPart, ToolPart } from '@/lib/opencode/model';
 
 import type { MessageStreamPhase } from '@/stores/types/sessionTypes';
 import { useSessionUIStore } from '@/sync/session-ui-store';
-import { useDirectorySync, useSessionMessages, useSessionPermissions, useSessionForms, useSessionStatus } from '@/sync/sync-context';
+import { useDirectorySync, useSession, useSessionMessages, useSessionPermissions, useSessionForms, useSessionStatus } from '@/sync/sync-context';
 import { useCurrentSessionActivity } from './useSessionActivity';
 
 type AssistantActivity = 'idle' | 'streaming' | 'tooling' | 'cooldown' | 'permission';
@@ -260,7 +260,15 @@ const hasNewerPrompt = (messages: Message[], index: number): boolean => {
     return false;
 };
 
-export const getActiveAssistantContext = (messages: Message[]): ActiveAssistantContext => {
+/**
+ * `sessionModel` is the session record's own model: in OpenCode v2 a send
+ * switches the session before the prompt goes out, so it names what the next
+ * turn runs on before any assistant record exists.
+ */
+export const getActiveAssistantContext = (messages: Message[], sessionModel?: ModelRef | null): ActiveAssistantContext => {
+    const sessionProviderId = sessionModel?.providerID.trim() ?? '';
+    const sessionModelId = sessionModel?.id.trim() ?? '';
+    const nextTurnModel = sessionProviderId && sessionModelId ? { providerId: sessionProviderId, modelId: sessionModelId } : null;
     // OpenCode v2 records the provider and model on the assistant message
     // itself, so the active model no longer has to be looked up on the user
     // message that triggered the turn (which no longer links back to it).
@@ -268,14 +276,15 @@ export const getActiveAssistantContext = (messages: Message[]): ActiveAssistantC
         const message = messages[index];
         if (message?.role !== 'assistant') continue;
 
-        // A prompt newer than this answer starts a turn whose model nothing has
-        // recorded yet: a v2 user message carries no model, and the composer may
-        // have switched models or be routing through Auto. Reporting the previous
-        // turn's model would name the wrong one, so nothing is shown until the new
-        // turn's assistant record lands (it is created as the turn starts). A turn
-        // still running keeps its model: the newer prompt is only queued behind it.
+        // A prompt newer than this answer starts a turn this answer's model
+        // says nothing about: a v2 user message carries no model, and the
+        // composer may have switched models since. The session record already
+        // holds the switched model (the send switches before it prompts), so it
+        // is the one shown; without it nothing is shown rather than the previous
+        // turn's. A turn still running keeps its model: the newer prompt is only
+        // queued behind it.
         if (message.time.completed !== undefined && hasNewerPrompt(messages, index)) {
-            return { assistantId: message.id, model: null };
+            return { assistantId: message.id, model: nextTurnModel };
         }
 
         const providerId = message.providerID.trim();
@@ -304,9 +313,10 @@ export function useAssistantStatus(): AssistantStatusSnapshot {
         currentSessionDirectory ?? undefined,
     );
 
+    const sessionModel = useSession(currentSessionId ?? undefined, currentSessionDirectory ?? undefined)?.model ?? null;
     const activeAssistant = React.useMemo(
-        () => getActiveAssistantContext(rawSessionMessages),
-        [rawSessionMessages],
+        () => getActiveAssistantContext(rawSessionMessages, sessionModel),
+        [rawSessionMessages, sessionModel],
     );
     const lastAssistantId = activeAssistant.assistantId;
 
