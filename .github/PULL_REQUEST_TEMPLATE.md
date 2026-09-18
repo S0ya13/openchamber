@@ -26,6 +26,8 @@
 |---|---|
 |  |  |
 
+**Live run:** <!-- Did you run the built or running app and exercise the changed path? Name the runtime (web / desktop / VS Code / hosted mobile / Capacitor mobile), the OS, and what you saw. Not required when no user-reachable behavior changes. If you could not run it, say so and why. -->
+
 ## Visual evidence
 
 <!-- User-visible change: attach current before/after screenshots or recordings for the affected desktop/mobile, narrow/wide, theme, and interaction states. No visible change: explain concretely why the diff cannot affect rendered behavior. -->

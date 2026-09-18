@@ -169,6 +169,13 @@ Every pull request must explain:
 - **Validation:** exact automated and manual checks performed, their result,
   and anything that was not verified. A command name without a result is not
   evidence.
+- **Live run:** if your change touches behavior a user can reach at run time,
+  say that you ran the built or running app and exercised the changed path.
+  Name the runtime you used (web, desktop, VS Code, hosted mobile, or Capacitor
+  mobile), the operating system, and what you saw. Reading the diff, passing
+  types, and green CI are not a live run. If you genuinely cannot run it, say
+  so and explain why; an honest gap is reviewable, a claim we later find hollow
+  is not.
 - **Risk and failure behavior:** meaningful failure, rollback, cleanup,
   compatibility, security, performance, or cross-runtime considerations.
 
@@ -216,8 +223,10 @@ The reviewer records the exact HEAD it inspected and returns one verdict:
 
 - `PASS`: no blocking correctness, compliance, or evidence issue was found.
 - `NEEDS_EVIDENCE`: no correctness, repository-guidance, or contribution-contract
-  blocker was found, but a required screenshot, interaction recording, or
-  empirical measurement is missing, stale, contradictory, or inadequate.
+  blocker was found, but a required screenshot, interaction recording,
+  empirical measurement, or live-run statement is missing, stale,
+  contradictory, or inadequate. A change to user-reachable behavior with no
+  live-run statement does not reach `PASS`.
 - `BLOCKED`: a concrete correctness, security, repository-rule, or contribution
   contract violation must be fixed.
 - `HUMAN_REVIEW_REQUIRED`: the change affects review policy or another boundary
