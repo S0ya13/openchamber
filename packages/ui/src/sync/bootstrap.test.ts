@@ -20,10 +20,12 @@ const mcp = spyOn(opencodeClient, "listMcpServers")
 const vcs = spyOn(opencodeClient, "getVcs")
 const forms = spyOn(opencodeClient, "listPendingForms")
 const permissions = spyOn(opencodeClient, "listPendingPermissions")
-const spies = [location, config, statuses, commands, mcp, vcs, forms, permissions]
+// `commands` and `mcp` are spied so the regression test can assert bootstrap
+// never touches them; they are not part of directory initialization.
+const spies = [location, config, statuses, vcs, forms, permissions]
 
 beforeEach(() => {
-  for (const spy of spies) spy.mockReset()
+  for (const spy of [...spies, commands, mcp]) spy.mockReset()
   location.mockImplementation(async (directory) => ({
     directory: directory ?? "/repo",
     project: { id: "project-a", directory: directory ?? "/repo", canonical: directory ?? "/repo" },
@@ -56,26 +58,23 @@ const form = (id: string, title = "Pick"): FormRequest => ({
 })
 
 describe("bootstrapDirectory", () => {
-  for (const field of ["config", "mcp"] as const) {
-    test(`finishes session loading while ${field} is unresolved`, async () => {
-      const blocked = deferred<void>()
-      if (field === "config") config.mockImplementation(async () => { await blocked.promise; return {} })
-      else mcp.mockImplementation(async () => { await blocked.promise; return [] })
-      const input = inputFor()
-      let initialized = false
-      const bootstrap = bootstrapDirectory(input)
-      void bootstrap.environment.then(() => { initialized = true })
-      try {
-        expect(await bootstrap.sessions).toBe("complete")
-        expect(initialized).toBe(false)
-        expect(input.store.getState().status).toBe("partial")
-      } finally {
-        blocked.resolve()
-        expect(await bootstrap.environment).toBe("complete")
-        expect(input.store.getState().status).toBe("complete")
-      }
-    })
-  }
+  test("finishes session loading while the config read is unresolved", async () => {
+    const blocked = deferred<void>()
+    config.mockImplementation(async () => { await blocked.promise; return {} })
+    const input = inputFor()
+    let initialized = false
+    const bootstrap = bootstrapDirectory(input)
+    void bootstrap.environment.then(() => { initialized = true })
+    try {
+      expect(await bootstrap.sessions).toBe("complete")
+      expect(initialized).toBe(false)
+      expect(input.store.getState().status).toBe("partial")
+    } finally {
+      blocked.resolve()
+      expect(await bootstrap.environment).toBe("complete")
+      expect(input.store.getState().status).toBe("complete")
+    }
+  })
 
   test("keeps session-list failure separate from successful environment initialization", async () => {
     const cached: Session[] = [{
@@ -113,14 +112,28 @@ describe("bootstrapDirectory", () => {
     expect(input.store.getState().sessionStatusReady).toBeUndefined()
   })
 
-  test("optional MCP failure preserves its previous state without failing core initialization", async () => {
-    mcp.mockRejectedValue(Object.assign(new Error("MCP unavailable"), { status: 400 }))
-    const previous: State["mcp"] = { server: { name: "server", status: { status: "connected" } } }
-    const input = inputFor({ mcp: previous })
+  test("optional VCS failure preserves its previous state without failing core initialization", async () => {
+    vcs.mockRejectedValue(Object.assign(new Error("VCS unavailable"), { status: 400 }))
+    const previous: State["vcs"] = { branch: "main" }
+    const input = inputFor({ vcs: previous })
     const bootstrap = bootstrapDirectory(input)
     expect(await bootstrap.sessions).toBe("complete")
     expect(await bootstrap.environment).toBe("complete")
-    expect(input.store.getState().mcp).toBe(previous)
+    expect(input.store.getState().vcs).toBe(previous)
+  })
+
+  test("never reads MCP-initializing endpoints during directory initialization", async () => {
+    // Reading MCP status initializes the directory's entire stdio server
+    // fleet, and listing commands enumerates MCP prompts, which touches the
+    // same state. Bootstrap used to run for every known project directory, so
+    // either read spawned a fleet per project at startup. MCP and command
+    // surfaces fetch on demand instead.
+    const input = inputFor()
+    const bootstrap = bootstrapDirectory(input)
+    expect(await bootstrap.sessions).toBe("complete")
+    expect(await bootstrap.environment).toBe("complete")
+    expect(mcp.mock.calls).toHaveLength(0)
+    expect(commands.mock.calls).toHaveLength(0)
   })
 
   test("rejects stale work before starting either phase", async () => {
@@ -174,7 +187,7 @@ describe("bootstrapDirectory", () => {
       const bootstrap = bootstrapDirectory(input)
       expect(await bootstrap.sessions).toBe("complete")
       expect(await bootstrap.environment).toBe("complete")
-      for (const spy of [location, config, commands, mcp, vcs]) expect(spy.mock.calls).toEqual([[directory]])
+      for (const spy of [location, config, vcs]) expect(spy.mock.calls).toEqual([[directory]])
       for (const spy of [forms, permissions]) expect(spy.mock.calls).toEqual([[{ directories: [directory], includeGlobal: false }]])
       expect(statuses.mock.calls).toEqual([[]])
       expect(input.store.getState().path.directory).toBe(directory)

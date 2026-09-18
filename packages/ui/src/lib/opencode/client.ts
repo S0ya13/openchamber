@@ -37,7 +37,7 @@ import { getRegisteredRuntimeAPIs } from "@/contexts/runtimeAPIRegistry"
 import { markStartupTrace } from "@/lib/startupTrace"
 import { assertProviderCircuitClosed, recordProviderError, recordProviderSuccess } from "./provider-tracker"
 import { normalizePath } from "@/lib/pathNormalization"
-import { activeSessionSnapshotSchema } from "./session-status"
+import { activeSessionSnapshotSchema, hostSessionStatusSnapshotSchema, type HostSessionStatusSnapshot } from "./session-status"
 import {
   compact,
   type Agent,
@@ -1164,6 +1164,28 @@ class OpencodeService {
       return statuses
     } catch {
       return null
+    }
+  }
+
+  /**
+   * Cross-project busy/retry/idle map kept by the OpenChamber host from the
+   * single upstream event stream. One request that creates no OpenCode
+   * instance, unlike `/session/status?directory=`. `null` means the fetch
+   * failed; callers must preserve their current state.
+   */
+  async getHostSessionStatusSnapshot(): Promise<HostSessionStatusSnapshot | null> {
+    try {
+      const response = await runtimeFetch('/api/sessions/status', {
+        method: 'GET',
+        headers: { Accept: 'application/json' },
+      });
+      if (!response.ok) {
+        return null;
+      }
+      const parsed = hostSessionStatusSnapshotSchema.safeParse(await response.json().catch(() => null));
+      return parsed.success ? parsed.data : null;
+    } catch {
+      return null;
     }
   }
 

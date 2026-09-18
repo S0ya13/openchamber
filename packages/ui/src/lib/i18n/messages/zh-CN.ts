@@ -619,6 +619,7 @@ export const dict: Record<I18nKey, string> = {
   'sessions.sidebar.session.status.permissionRequired': '需要权限',
   'sessions.sidebar.session.status.questionPendingSingle': '1 个待回答问题',
   'sessions.sidebar.session.status.questionPendingMany': '{count} 个待回答问题',
+  'sessions.sidebar.session.status.questionPending': '待回答问题',
   'sessions.sidebar.session.status.activeFor': '已活动 {duration}',
   'sessions.sidebar.session.status.lastTurnDuration': '上一轮耗时 {duration}',
   'sessions.sidebar.session.subsessions.collapse': '折叠子会话',

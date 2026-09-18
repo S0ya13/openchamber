@@ -528,6 +528,7 @@ export const dict = {
   'sessions.sidebar.session.status.permissionRequired': 'Berechtigung erforderlich',
   'sessions.sidebar.session.status.questionPendingSingle': '1 ausstehende Frage',
   'sessions.sidebar.session.status.questionPendingMany': '{count} ausstehende Fragen',
+  'sessions.sidebar.session.status.questionPending': 'Ausstehende Frage',
   'sessions.sidebar.session.status.activeFor': 'Seit {duration} aktiv',
   'sessions.sidebar.session.status.lastTurnDuration': 'Letzter Durchlauf dauerte {duration}',
   'sessions.sidebar.session.subsessions.collapse': 'Untersitzungen einklappen',

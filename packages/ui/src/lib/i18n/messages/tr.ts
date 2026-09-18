@@ -600,6 +600,7 @@ export const dict = {
   'sessions.sidebar.session.status.permissionRequired': 'İzin gerekiyor',
   'sessions.sidebar.session.status.questionPendingSingle': '1 bekleyen soru',
   'sessions.sidebar.session.status.questionPendingMany': '{count} bekleyen soru',
+  'sessions.sidebar.session.status.questionPending': 'Bekleyen soru',
   'sessions.sidebar.session.status.activeFor': '{duration} süredir aktif',
   'sessions.sidebar.session.status.lastTurnDuration': 'Son tur {duration} sürdü',
   'sessions.sidebar.session.subsessions.collapse': 'Alt session\'ları daralt',

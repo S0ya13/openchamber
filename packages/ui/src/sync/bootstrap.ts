@@ -106,8 +106,8 @@ export function bootstrapDirectory(input: DirectoryBootstrapInput) {
       return "failed"
     }
   })()
-  // Initialization has its own completion and network capacity. A slow config,
-  // MCP server, or directory cannot hold the session-list scheduler's slot.
+  // Initialization has its own completion and network capacity. A slow config
+  // or directory cannot hold the session-list scheduler's slot.
   const environment = initializeDirectory(input)
   return { sessions, environment }
 }
@@ -134,8 +134,8 @@ async function initializeDirectory(input: DirectoryBootstrapInput): Promise<Boot
   commit({ status: "partial" })
   if (input.isStale?.()) return "stale"
 
-  // Queue live recovery first. Each read commits independently and failures in
-  // config/MCP cannot suppress pending forms or permission recovery.
+  // Queue live recovery first. Each read commits independently and a failing
+  // config read cannot suppress pending form or permission recovery.
   const critical = Promise.allSettled([
     read(async () => {
       const session_status = await readDirectoryStatusSnapshot(store, async () => {
@@ -169,13 +169,12 @@ async function initializeDirectory(input: DirectoryBootstrapInput): Promise<Boot
       }),
     ),
   ])
+  // MCP status and the command list are deliberately not read here. Reading
+  // MCP state initializes the directory's whole stdio server fleet as an
+  // OpenCode side effect, and listing commands enumerates MCP prompts, which
+  // touches that same state. Both surfaces fetch on demand through their own
+  // stores (useMcpStore, useCommandsStore) instead.
   const enrichment = Promise.allSettled([
-    read(() => opencodeClient.listCommands(directory).then((command) => commit({ command }))),
-    read(() =>
-      opencodeClient.listMcpServers(directory).then((servers) => {
-        commit({ mcp: Object.fromEntries(servers.map((server) => [server.name, server])) })
-      }),
-    ),
     read(() => opencodeClient.getVcs(directory).then((vcs) => commit({ vcs }))),
   ])
   const [results, enrichmentResults] = await Promise.all([critical, enrichment])

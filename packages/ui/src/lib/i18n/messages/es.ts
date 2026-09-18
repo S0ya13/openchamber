@@ -619,6 +619,7 @@ export const dict: Record<I18nKey, string> = {
   "sessions.sidebar.session.status.permissionRequired": "Permiso requerido",
   "sessions.sidebar.session.status.questionPendingSingle": "1 pregunta pendiente",
   "sessions.sidebar.session.status.questionPendingMany": "{count} preguntas pendientes",
+  "sessions.sidebar.session.status.questionPending": "Pregunta pendiente",
   "sessions.sidebar.session.status.activeFor": "Activa desde hace {duration}",
   "sessions.sidebar.session.status.lastTurnDuration": "El último turno duró {duration}",
   "sessions.sidebar.session.subsessions.collapse": "Colapsar subsesiones",

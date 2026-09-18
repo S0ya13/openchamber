@@ -1,9 +1,7 @@
 import type {
   Agent,
-  Command,
   Config,
   FormRequest,
-  McpServerStatus,
   Message,
   Part,
   PermissionRequest,
@@ -40,7 +38,6 @@ export type ProjectMeta = {
 export type State = {
   status: "loading" | "partial" | "complete"
   agent: Agent[]
-  command: Command[]
   project: string
   projectMeta: ProjectMeta | undefined
   icon: string | undefined
@@ -59,8 +56,6 @@ export type State = {
   permission: Record<string, PermissionRequest[]>
   /** Pending forms (the agent asking the user for input), keyed by session. */
   form: Record<string, FormRequest[]>
-  /** MCP servers keyed by name. */
-  mcp: Record<string, McpServerStatus>
   vcs: Vcs | undefined
   limit: number
   message: Record<string, Message[]>
@@ -135,7 +130,6 @@ export const INITIAL_STATE: State = {
   path: EMPTY_PATH,
   status: "loading",
   agent: [],
-  command: [],
   session: [],
   sessionTotal: 0,
   sessionListSource: "empty",
@@ -145,7 +139,6 @@ export const INITIAL_STATE: State = {
   session_status: {},
   permission: {},
   form: {},
-  mcp: {},
   vcs: undefined,
   limit: 5,
   message: {},
