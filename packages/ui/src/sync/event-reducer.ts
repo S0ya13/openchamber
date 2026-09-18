@@ -145,6 +145,15 @@ function hasMessage(draft: State, sessionID: string | undefined, messageID: stri
   return messages.some((message) => message.id === messageID)
 }
 
+/** Index of the compaction still running in a session (the newest one), or -1. */
+const findRunningCompactionIndex = (messages: readonly Message[]): number => {
+  for (let index = messages.length - 1; index >= 0; index -= 1) {
+    const message = messages[index]
+    if (message?.role === "compaction") return message.status === "running" ? index : -1
+  }
+  return -1
+}
+
 export function reduceGlobalEvent(event: SyncEvent): GlobalEventResult {
   if (event.type === "server.connected") {
     return { type: "refresh" }
@@ -379,11 +388,21 @@ export function applyDirectoryEvent(
     }
 
     case "message.updated": {
-      const info = event.properties.info
+      let info = event.properties.info
       const messages = draft.message[info.sessionID]
       if (!messages) {
         draft.message[info.sessionID] = [info]
         return true
+      }
+      // A compaction settles the record that has been running, the way
+      // OpenCode's own message store does: `session.compaction.ended` carries
+      // no input id, so the settled record keeps the running one's identity.
+      const runningCompaction = info.role === "compaction" && info.status !== "running"
+        ? findRunningCompactionIndex(messages)
+        : -1
+      if (runningCompaction >= 0) {
+        const running = messages[runningCompaction]
+        info = { ...info, id: running.id, time: { ...running.time } }
       }
       const messageIndex = findMessageIndex(messages, info.id)
       if (messageIndex >= 0) {
@@ -437,6 +456,20 @@ export function applyDirectoryEvent(
         next.splice(messageIndex, 1)
         insertMessageChronologically(next, updated)
       }
+      draft.message[sessionID] = next
+      return true
+    }
+
+    case "message.compaction.delta": {
+      const { sessionID, delta } = event.properties
+      const messages = draft.message[sessionID]
+      if (!messages || !delta) return false
+      const index = findRunningCompactionIndex(messages)
+      if (index < 0) return false
+      const running = messages[index]
+      if (running.role !== "compaction") return false
+      const next = [...messages]
+      next[index] = { ...running, summary: running.summary + delta }
       draft.message[sessionID] = next
       return true
     }

@@ -40,6 +40,9 @@ const CompactionNotice: React.FC<{ message: Extract<Message, { role: 'compaction
             : t('chat.compaction.completed');
 
     const summary = message.summary.trim();
+    // The summary streams in while the compaction runs, so it is shown as it
+    // grows; once settled it collapses behind the toggle.
+    const showSummary = summary && (expanded || message.status === 'running');
 
     return (
         <NoticeRow>
@@ -57,7 +60,7 @@ const CompactionNotice: React.FC<{ message: Extract<Message, { role: 'compaction
                         />
                     )}
                     <span className="typography-micro text-muted-foreground">{label}</span>
-                    {summary ? (
+                    {summary && message.status !== 'running' ? (
                         <button
                             type="button"
                             className="ml-auto typography-micro text-muted-foreground underline underline-offset-2 hover:text-foreground transition-colors"
@@ -70,7 +73,7 @@ const CompactionNotice: React.FC<{ message: Extract<Message, { role: 'compaction
                 {message.error ? (
                     <div className="mt-1 typography-micro text-[var(--status-error)] break-words">{message.error.message}</div>
                 ) : null}
-                {expanded && summary ? (
+                {showSummary ? (
                     <div className="mt-1.5 max-h-56 overflow-auto typography-meta text-foreground/85 whitespace-pre-wrap break-words">
                         {summary}
                     </div>

@@ -149,6 +149,9 @@ describe("translateWireEvent", () => {
     expect(delta).toEqual([
       { type: "message.part.delta", properties: { sessionID: "ses_1", messageID: "msg_a", partID: "msg_a:text:1", field: "text", delta: "he" } },
     ])
+    expect(translateWireEvent({ ...base, type: "session.compaction.delta", data: { sessionID: "ses_1", text: "sum" } })).toEqual([
+      { type: "message.compaction.delta", properties: { sessionID: "ses_1", delta: "sum" } },
+    ])
     const ended = translateWireEvent({
       ...base,
       type: "session.text.ended",

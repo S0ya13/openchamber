@@ -109,6 +109,8 @@ export type SyncEvent =
   | { type: "message.part.delta"; properties: { sessionID: string; messageID: string; partID: string; field: "text" | "raw"; delta: string } }
   | { type: "message.tool.transition"; properties: { sessionID: string; messageID: string; partID: string; transition: ToolTransition } }
   | { type: "message.parts.replaced"; properties: { sessionID: string; messageID: string; parts: Part[] } }
+  /** Text appended to the summary of the compaction currently running in the session. */
+  | { type: "message.compaction.delta"; properties: { sessionID: string; delta: string } }
   | { type: "permission.asked"; properties: PermissionRequest }
   | { type: "permission.replied"; properties: { sessionID: string; requestID: string } }
   | { type: "form.created"; properties: { form: FormRequest } }
@@ -680,6 +682,10 @@ export function translateWireEvent(event: OpenCodeEvent): SyncEvent[] {
           },
         },
       ]
+    // The summary streams into the running compaction record; the event names
+    // only the session, so the reducer finds that record itself.
+    case "session.compaction.delta":
+      return [{ type: "message.compaction.delta", properties: { sessionID: event.data.sessionID, delta: event.data.text } }]
     case "session.compaction.ended":
       return [
         {
@@ -772,9 +778,6 @@ export function translateWireEvent(event: OpenCodeEvent): SyncEvent[] {
     // `provider.updated` (and then `model.updated`) for the same change, so
     // acting here too would only double every read.
     case "integration.updated":
-    // The compaction summary is rendered from `started`/`ended`; OpenChamber
-    // does not stream it.
-    case "session.compaction.delta":
     // The fork's own `session.created` carries everything the stores need.
     case "session.forked":
     // Queue-vs-steer placement of a pending inbox item is not shown.
@@ -856,6 +859,7 @@ export function syncEventSessionID(event: SyncEvent): string | undefined {
     case "message.part.delta":
     case "message.tool.transition":
     case "message.parts.replaced":
+    case "message.compaction.delta":
     case "permission.replied":
     case "form.settled":
       return event.properties.sessionID

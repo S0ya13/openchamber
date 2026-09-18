@@ -102,6 +102,17 @@ second time `PROVIDER_REREAD_AFTER_CREDENTIAL_MS` after a credential change.
 | `provider` / `model` / `credential` | `provider` per directory | config-store providers (model-metadata cache invalidated; the current list stays until the new one lands; `credential` reads twice) |
 | `project` | global project list | — |
 
+## Compaction records
+
+A compaction is one `compaction` message. `session.compaction.started` inserts
+it as `running`; `session.compaction.delta` appends to its `summary` while
+OpenCode writes it (the event names only the session, so the reducer finds the
+newest running compaction itself); `session.compaction.ended` / `failed`
+settle it. The settled event carries no input id, so the reducer keeps the
+running record's id and creation time instead of adding a second record, the
+way OpenCode's own message store does. The timeline notice shows the summary
+as it grows and collapses it behind a toggle once settled.
+
 ## A location's services going away
 
 OpenCode caches the service graph that serves a directory and drops it after

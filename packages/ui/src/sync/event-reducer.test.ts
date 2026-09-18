@@ -102,6 +102,37 @@ describe("session events", () => {
   })
 })
 
+describe("compaction events", () => {
+  const running = (): Message => ({
+    id: "msg_compact", sessionID: "ses_1", role: "compaction", time: { created: 5 }, status: "running", reason: "auto", summary: "",
+  })
+
+  test("summary deltas grow the running compaction", () => {
+    const draft = state({ message: { ses_1: [assistant(), running()] } })
+    expect(apply(draft, { type: "message.compaction.delta", properties: { sessionID: "ses_1", delta: "Hello" } })).toBe(true)
+    expect(apply(draft, { type: "message.compaction.delta", properties: { sessionID: "ses_1", delta: " world" } })).toBe(true)
+    expect(draft.message.ses_1[1]).toMatchObject({ id: "msg_compact", status: "running", summary: "Hello world" })
+  })
+
+  test("a delta without a running compaction changes nothing", () => {
+    const draft = state()
+    expect(apply(draft, { type: "message.compaction.delta", properties: { sessionID: "ses_1", delta: "x" } })).toBe(false)
+  })
+
+  test("the settled record replaces the running one instead of adding a second", () => {
+    const draft = state({ message: { ses_1: [assistant(), running()] } })
+    apply(draft, {
+      type: "message.updated",
+      properties: {
+        info: { id: "msg_evt_9", sessionID: "ses_1", role: "compaction", time: { created: 9 }, status: "completed", reason: "auto", summary: "Done." },
+      },
+    })
+    const compactions = draft.message.ses_1.filter((message) => message.role === "compaction")
+    expect(compactions).toHaveLength(1)
+    expect(compactions[0]).toMatchObject({ id: "msg_compact", time: { created: 5 }, status: "completed", summary: "Done." })
+  })
+})
+
 describe("message events", () => {
   test("a patch completes the assistant message without replacing unrelated fields", () => {
     const draft = state()

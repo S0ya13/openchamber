@@ -91,7 +91,7 @@ export const MCP_DRAFT_OAUTH_UNSET = {
 const readMcpStatusName = (server: McpServerStatus | undefined): string | undefined => server?.status.status;
 
 const readMcpStatusError = (server: McpServerStatus | undefined): string | undefined =>
-  server?.status.status === 'failed' ? server.status.error : undefined;
+  server?.status.status === 'failed' || server?.status.status === 'needs_auth' ? server.status.error : undefined;
 
 // ─────────────────────────────────────────────────────────────
 // CommandTextarea  — one arg per line, paste-friendly
@@ -485,7 +485,7 @@ const getStatusDescription = (
     case 'failed':
       return error?.trim() || t('settings.mcp.page.status.description.failedDefault');
     case 'needs_auth':
-      return t('settings.mcp.page.status.description.needsAuth');
+      return error?.trim() || t('settings.mcp.page.status.description.needsAuth');
     case 'disabled':
       return t('settings.mcp.page.status.description.disabled');
     default:
