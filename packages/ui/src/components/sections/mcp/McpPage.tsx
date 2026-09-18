@@ -612,7 +612,7 @@ export const McpPage: React.FC = () => {
   const [timeoutStartup, setTimeoutStartup] = React.useState('');
   const [timeoutCatalog, setTimeoutCatalog] = React.useState('');
   const [timeoutExecution, setTimeoutExecution] = React.useState('');
-  const [codemode, setCodemode] = React.useState(false);
+  const [codemode, setCodemode] = React.useState(true);
   const [protocol, setProtocol] = React.useState<McpProtocol>('legacy');
   const [oauthAuthServerMetadataUrl, setOauthAuthServerMetadataUrl] = React.useState('');
   const [carriedOAuth, setCarriedOAuth] = React.useState<McpOAuthCarried>(MCP_DRAFT_OAUTH_UNSET);
@@ -701,7 +701,7 @@ export const McpPage: React.FC = () => {
     setTimeoutStartup(next.timeoutStartup ?? '');
     setTimeoutCatalog(next.timeoutCatalog ?? '');
     setTimeoutExecution(next.timeoutExecution ?? '');
-    setCodemode(next.codemode ?? false);
+    setCodemode(next.codemode ?? true);
     setEnabled(next.disabled !== true);
     setProtocol(next.protocol ?? 'legacy');
     setOauthAuthServerMetadataUrl(next.oauthAuthServerMetadataUrl ?? '');
@@ -784,7 +784,8 @@ export const McpPage: React.FC = () => {
       const nextStartup = msField(selectedServer.timeout?.startup);
       const nextCatalog = msField(selectedServer.timeout?.catalog);
       const nextExecution = msField(selectedServer.timeout?.execution);
-      const nextCodemode = selectedServer.codemode === true;
+      // OpenCode treats an absent `codemode` as enabled.
+      const nextCodemode = selectedServer.codemode !== false;
       // An entry without the key is what OpenCode calls `legacy`.
       const nextProtocol = selectedServer.protocol ?? 'legacy';
       const nextCarriedOAuth = readCarriedOAuth(remoteServer?.oauth);

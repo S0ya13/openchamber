@@ -1550,7 +1550,7 @@ export const settingsDict = {
   'settings.mcp.page.connection.pasteCommand': '貼上命令',
   'settings.mcp.page.connection.pasteCommandTitle': '從剪貼簿貼上本機命令並自動拆分',
   'settings.mcp.page.connection.previewArgs': '預覽（{count} 個參數）',
-  'settings.mcp.page.advanced.title': '遠端進階選項',
+  'settings.mcp.page.advanced.title': '進階',
   'settings.mcp.page.advanced.configure': '設定進階選項',
   'settings.mcp.page.advanced.autoDetect': '自動偵測',
   'settings.mcp.page.advanced.custom': '自訂',

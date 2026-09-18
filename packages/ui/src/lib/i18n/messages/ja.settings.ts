@@ -1675,7 +1675,7 @@ export const settingsDict = {
   'settings.mcp.page.connection.pasteCommand': 'コマンドを貼り付け',
   'settings.mcp.page.connection.pasteCommandTitle': 'クリップボードからローカルコマンドを貼り付けて自動分割',
   'settings.mcp.page.connection.previewArgs': 'プレビュー（{count} 引数）',
-  'settings.mcp.page.advanced.title': '高度なリモートオプション',
+  'settings.mcp.page.advanced.title': '詳細設定',
   'settings.mcp.page.advanced.configure': '高度なオプションを設定',
   'settings.mcp.page.advanced.autoDetect': '自動検出',
   'settings.mcp.page.advanced.custom': 'カスタム',

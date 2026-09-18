@@ -393,7 +393,7 @@ const MobileShell: React.FC<{ onActiveConnectionDeleted: () => void }> = ({ onAc
       timeoutStartup: '',
       timeoutCatalog: '',
       timeoutExecution: '',
-      codemode: false,
+      codemode: true,
       disabled: false,
     };
 

@@ -553,7 +553,8 @@ function buildMcpBody(config: Partial<McpDraft>): Record<string, unknown> {
   }
 
   if (config.codemode !== undefined) {
-    body.codemode = config.codemode;
+    // OpenCode defaults Code Mode to on, so only an explicit off is worth a key.
+    body.codemode = config.codemode ? null : false;
   }
 
   if (config.disabled !== undefined) {

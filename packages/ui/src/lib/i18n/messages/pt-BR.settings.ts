@@ -1642,7 +1642,7 @@ export const settingsDict = {
   "settings.mcp.page.connection.pasteCommand": "Colar comando",
   "settings.mcp.page.connection.pasteCommandTitle": "Cole um comando local da área de transferência e separe-o automaticamente",
   "settings.mcp.page.connection.previewArgs": "Pré-visualização ({count} argumentos)",
-  "settings.mcp.page.advanced.title": "Opções remotas avanzadas",
+  "settings.mcp.page.advanced.title": "Avançado",
   "settings.mcp.page.advanced.configure": "Configurer opções avanzadas",
   "settings.mcp.page.advanced.autoDetect": "Detectar automaticamente",
   "settings.mcp.page.advanced.custom": "Personalizado",

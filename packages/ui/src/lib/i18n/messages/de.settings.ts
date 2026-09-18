@@ -1609,7 +1609,7 @@ export const settingsDict = {
   'settings.mcp.page.connection.pasteCommand': 'Befehl einfügen',
   'settings.mcp.page.connection.pasteCommandTitle': 'Einen lokalen Befehl aus der Zwischenablage einfügen und automatisch aufteilen',
   'settings.mcp.page.connection.previewArgs': 'Vorschau ({count} Argumente)',
-  'settings.mcp.page.advanced.title': 'Erweiterte Remote-Optionen',
+  'settings.mcp.page.advanced.title': 'Erweitert',
   'settings.mcp.page.advanced.configure': 'Erweiterte Optionen konfigurieren',
   'settings.mcp.page.advanced.autoDetect': 'Automatische Erkennung',
   'settings.mcp.page.advanced.custom': 'Benutzerdefiniert',

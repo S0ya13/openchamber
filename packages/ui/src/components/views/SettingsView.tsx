@@ -439,7 +439,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ onClose, forceMobile
         timeoutStartup: '',
         timeoutCatalog: '',
         timeoutExecution: '',
-        codemode: false,
+        codemode: true,
         disabled: false,
       });
       store.setSelectedMcp(name);

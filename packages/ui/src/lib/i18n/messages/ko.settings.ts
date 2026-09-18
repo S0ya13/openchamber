@@ -1642,7 +1642,7 @@ export const settingsDict = {
   'settings.mcp.page.connection.pasteCommand': '명령어 붙여넣기',
   'settings.mcp.page.connection.pasteCommandTitle': '클립보드에서 로컬 command를 붙여넣고 자동 분리',
   'settings.mcp.page.connection.previewArgs': '미리보기({count} args)',
-  'settings.mcp.page.advanced.title': '고급 원격 옵션',
+  'settings.mcp.page.advanced.title': '고급',
   'settings.mcp.page.advanced.configure': '고급 옵션 설정',
   'settings.mcp.page.advanced.autoDetect': '자동 감지',
   'settings.mcp.page.advanced.custom': '사용자 정의',

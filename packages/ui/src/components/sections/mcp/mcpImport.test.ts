@@ -84,6 +84,13 @@ describe('parseImportedMcpSnippet', () => {
     expect(result.protocol).toBe('auto');
   });
 
+  test('a paste without codemode reads as enabled, the way OpenCode treats it', () => {
+    const result = parseImportedMcpSnippet(JSON.stringify({ mcp: { servers: { plain: { type: 'remote', url: 'https://x.example/mcp' } } } }));
+    if (!result.ok) throw new Error(result.error);
+    expect(result.codemode).toBe(true);
+    expect(result.protocol).toBe('legacy');
+  });
+
   test('a local v2 server keeps its startup timeout', () => {
     const result = parseImportedMcpSnippet(JSON.stringify({
       mcp: {

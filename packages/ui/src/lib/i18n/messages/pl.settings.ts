@@ -479,7 +479,7 @@ export const settingsDict = {
   'settings.mcp.page.advanced.pasteHeaders': 'Wklej nagłówki',
   'settings.mcp.page.advanced.pasteHeadersTitle': 'Wklej linie nagłówków w formacie KLUCZ=WARTOŚĆ ze schowka',
   'settings.mcp.page.advanced.requestHeaders': 'Nagłówki żądań',
-  'settings.mcp.page.advanced.title': 'Zaawansowane opcje zdalne',
+  'settings.mcp.page.advanced.title': 'Zaawansowane',
   'settings.mcp.page.auth.authorizationUrl': 'URL autoryzacji',
   'settings.mcp.page.auth.callbackInputPlaceholder': 'Wklej URL callback lub kod autoryzacyjny',
   'settings.mcp.page.auth.manualFallbackDescription': 'Jeśli przeglądarka przekieruje do innej maszyny lub wyświetli URL callback z kodem, wklej tutaj pełny URL lub sam kod.',

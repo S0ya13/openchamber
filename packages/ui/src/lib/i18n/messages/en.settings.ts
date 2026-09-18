@@ -1665,7 +1665,7 @@ export const settingsDict = {
   'settings.mcp.page.connection.pasteCommand': 'Paste Command',
   'settings.mcp.page.connection.pasteCommandTitle': 'Paste a local command from clipboard and auto-split',
   'settings.mcp.page.connection.previewArgs': 'Preview ({count} args)',
-  'settings.mcp.page.advanced.title': 'Advanced Remote Options',
+  'settings.mcp.page.advanced.title': 'Advanced',
   'settings.mcp.page.advanced.configure': 'Configure advanced options',
   'settings.mcp.page.advanced.autoDetect': 'Auto-detect',
   'settings.mcp.page.advanced.custom': 'Custom',

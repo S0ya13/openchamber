@@ -1589,7 +1589,7 @@ export const settingsDict = {
   'settings.mcp.page.connection.pasteCommand': 'Komutu Yapıştır',
   'settings.mcp.page.connection.pasteCommandTitle': 'Panodaki yerel bir komutu yapıştır ve otomatik böl',
   'settings.mcp.page.connection.previewArgs': 'Önizleme ({count} argüman)',
-  'settings.mcp.page.advanced.title': 'Gelişmiş Uzak Seçenekleri',
+  'settings.mcp.page.advanced.title': 'Gelişmiş',
   'settings.mcp.page.advanced.configure': 'Gelişmiş seçenekleri yapılandır',
   'settings.mcp.page.advanced.autoDetect': 'Otomatik algıla',
   'settings.mcp.page.advanced.custom': 'Özel',

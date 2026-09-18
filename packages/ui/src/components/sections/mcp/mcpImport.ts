@@ -89,7 +89,8 @@ function buildResult(
     timeoutStartup: timeouts.startup,
     timeoutCatalog: timeouts.catalog,
     timeoutExecution: timeouts.execution,
-    codemode: raw.codemode === true,
+    // OpenCode treats an absent `codemode` as enabled.
+    codemode: raw.codemode !== false,
     disabled: buildDisabled(raw),
     protocol: MCP_PROTOCOLS.find((candidate) => candidate === raw.protocol) ?? 'legacy',
   };

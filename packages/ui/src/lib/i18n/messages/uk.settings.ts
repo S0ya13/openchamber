@@ -1642,7 +1642,7 @@ export const settingsDict = {
   "settings.mcp.page.connection.pasteCommand": "Вставити команду",
   "settings.mcp.page.connection.pasteCommandTitle": "Вставити локальну команду з буфера обміну й автоматично розділити її",
   "settings.mcp.page.connection.previewArgs": "Попередній перегляд аргументів: {count}",
-  "settings.mcp.page.advanced.title": "Розширені параметри віддаленого сервера",
+  "settings.mcp.page.advanced.title": "Додатково",
   "settings.mcp.page.advanced.configure": "Налаштувати додаткові параметри",
   "settings.mcp.page.advanced.autoDetect": "Автоматичне визначення",
   "settings.mcp.page.advanced.custom": "Власні",

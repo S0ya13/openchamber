@@ -4,6 +4,7 @@ import type { McpDraft } from './useMcpConfigStore';
 /** The parts of the MCP write body these tests make claims about. */
 type CapturedMcpBody = {
   protocol?: string | null;
+  codemode?: boolean | null;
   oauth?: {
     client_id?: string;
     callback_port?: number;
@@ -69,7 +70,7 @@ const remoteDraft = (overrides: Partial<McpDraft> = {}): McpDraft => ({
   timeoutStartup: '',
   timeoutCatalog: '',
   timeoutExecution: '',
-  codemode: false,
+  codemode: true,
   disabled: false,
   ...overrides,
 });
@@ -85,6 +86,14 @@ describe('useMcpConfigStore MCP body', () => {
   test('saving legacy writes a removal so the config file stays clean', async () => {
     await useMcpConfigStore.getState().updateMcp('example', remoteDraft({ protocol: 'legacy' }));
     expect(lastBody().protocol).toBeNull();
+  });
+
+  test('Code Mode on writes a removal (OpenCode defaults to on); off writes false', async () => {
+    await useMcpConfigStore.getState().updateMcp('example', remoteDraft({ codemode: true }));
+    expect(lastBody().codemode).toBeNull();
+
+    await useMcpConfigStore.getState().updateMcp('example', remoteDraft({ codemode: false }));
+    expect(lastBody().codemode).toBe(false);
   });
 
   test('saving a non-default protocol writes the value', async () => {

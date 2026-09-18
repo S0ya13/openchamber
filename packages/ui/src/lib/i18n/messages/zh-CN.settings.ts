@@ -1642,7 +1642,7 @@ export const settingsDict = {
   'settings.mcp.page.connection.pasteCommand': '粘贴命令',
   'settings.mcp.page.connection.pasteCommandTitle': '从剪贴板粘贴本地命令并自动拆分',
   'settings.mcp.page.connection.previewArgs': '预览（{count} 个参数）',
-  'settings.mcp.page.advanced.title': '远程高级选项',
+  'settings.mcp.page.advanced.title': '高级',
   'settings.mcp.page.advanced.configure': '配置高级选项',
   'settings.mcp.page.advanced.autoDetect': '自动检测',
   'settings.mcp.page.advanced.custom': '自定义',

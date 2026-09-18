@@ -1560,7 +1560,7 @@ export const settingsDict = {
   'settings.mcp.page.connection.pasteCommand': 'Commande Coller',
   'settings.mcp.page.connection.pasteCommandTitle': 'Collez une commande locale à partir du presse-papiers et divisez-la automatiquement',
   'settings.mcp.page.connection.previewArgs': 'Aperçu (arguments {count})',
-  'settings.mcp.page.advanced.title': 'Options avancées à distance',
+  'settings.mcp.page.advanced.title': 'Avancé',
   'settings.mcp.page.advanced.configure': 'Configurer les options avancées',
   'settings.mcp.page.advanced.autoDetect': 'Détection automatique',
   'settings.mcp.page.advanced.custom': 'Personnalisé',
