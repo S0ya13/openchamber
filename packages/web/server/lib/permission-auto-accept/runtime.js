@@ -25,6 +25,10 @@ export function createPermissionAutoAcceptRuntime({
   readSettingsFromDiskMigrated,
   persistSettings,
   broadcastGlobalUiEvent,
+  // The routing safety net: asked once per request before the automatic reply.
+  // `hold` leaves the request for the user; absent means every request is replied to.
+  evaluatePermission = null,
+  onPermissionReplied = null,
   fetchImpl = fetch,
   retryDelaysMs = RETRY_DELAYS_MS,
   requestTimeoutMs = REQUEST_TIMEOUT_MS,
@@ -151,6 +155,10 @@ export function createPermissionAutoAcceptRuntime({
     if (!permission?.id || !permission?.sessionID) return false;
     await load();
     if (!(await isSessionAutoAccepting(permission.sessionID, directory))) return false;
+    if (evaluatePermission) {
+      const verdict = await evaluatePermission(permission, directory);
+      if (verdict?.action === 'hold') return true;
+    }
     // v2 scopes a permission reply under its session.
     await request(`/api/session/${encodeURIComponent(permission.sessionID)}/permission/${encodeURIComponent(permission.id)}/reply`, {
       directory,
@@ -223,6 +231,13 @@ export function createPermissionAutoAcceptRuntime({
       // only the id and session id are used to reply.
       if (payload.type === 'permission.asked') {
         void processPermission(payload.properties, directory ?? payload.properties?.directory);
+        continue;
+      }
+      // The routing safety net holds a request instead of replying; once the
+      // user answers it, stop tracking it.
+      if (payload.type === 'permission.replied') {
+        const permissionId = payload.properties?.requestID;
+        if (typeof permissionId === 'string' && permissionId) onPermissionReplied?.(permissionId);
       }
     }
   };

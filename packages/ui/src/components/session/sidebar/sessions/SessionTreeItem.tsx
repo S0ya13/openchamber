@@ -11,9 +11,13 @@ import { SessionDeleteConfirmDialog } from '../shell/ConfirmDialogs';
 type Context = {
   groupDirectory?: string | null;
   projectId?: string | null;
+  folderOwnerKey?: string | null;
+  selectionScopeKey?: string | null;
   archivedBucket?: boolean;
   secondaryMeta?: { projectLabel?: string | null; branchLabel?: string | null } | null;
   renderContext?: 'project' | 'recent';
+  rowKey?: string;
+  dragKey?: string;
 };
 
 type SessionTreeItemRenderProps = Context & Pick<SessionNodeItemProps,
@@ -22,6 +26,7 @@ type SessionTreeItemRenderProps = Context & Pick<SessionNodeItemProps,
   | 'normalizedSessionSearchQuery'
   | 'notifyOnSubtasks'
   | 'editingId'
+  | 'editingRowKey'
   | 'editTitle'
   | 'openSidebarMenuKey'
   | 'mobileVariant'
@@ -35,6 +40,7 @@ type SessionTreeItemRenderProps = Context & Pick<SessionNodeItemProps,
 
 export type SessionTreeItemProps = SessionTreeItemRenderProps & Pick<SessionNodeItemProps,
   | 'setEditingId'
+  | 'setEditingRowKey'
   | 'setEditTitle'
   | 'toggleParent'
   | 'setOpenSidebarMenuKey'
@@ -42,13 +48,11 @@ export type SessionTreeItemProps = SessionTreeItemRenderProps & Pick<SessionNode
 > & {
   allowReselect: boolean;
   onSessionSelected?: (sessionId: string) => void;
-  isSessionSearchOpen: boolean;
-  sessionSearchQuery: string;
-  setSessionSearchQuery: (value: string) => void;
-  setIsSessionSearchOpen: (open: boolean) => void;
+  resetSessionSearch: () => void;
   deleteSessionConfirm: DeleteSessionConfirmState;
   setDeleteSessionConfirm: (value: DeleteSessionConfirmState) => void;
   startFolderRename: (scopeKey: string, folder: { id: string; name: string }) => void;
+  renderChildren?: boolean;
 };
 
 const EMPTY_SUBTREE_CONTAINS_EDITING: Set<string> = new Set();
@@ -60,9 +64,13 @@ export function SessionTreeItem({
   depth = 0,
   groupDirectory,
   projectId,
+  folderOwnerKey,
+  selectionScopeKey,
   archivedBucket = false,
   secondaryMeta,
   renderContext = 'project',
+  rowKey,
+  dragKey,
   renderExtras,
   pinnedSessionIds,
   expandedParents,
@@ -70,7 +78,9 @@ export function SessionTreeItem({
   normalizedSessionSearchQuery,
   notifyOnSubtasks,
   editingId,
+  editingRowKey,
   setEditingId,
+  setEditingRowKey,
   editTitle,
   setEditTitle,
   toggleParent,
@@ -78,17 +88,16 @@ export function SessionTreeItem({
   setOpenSidebarMenuKey,
   allowReselect,
   onSessionSelected,
-  isSessionSearchOpen,
-  sessionSearchQuery,
-  setSessionSearchQuery,
-  setIsSessionSearchOpen,
+  resetSessionSearch,
   deleteSessionConfirm,
   setDeleteSessionConfirm,
   startFolderRename,
   startSessionWorktreeMenuLoad,
   mobileVariant,
   alwaysShowActions,
+  renderChildren = true,
 }: SessionTreeItemProps): React.ReactNode {
+  const effectiveRowKey = rowKey ?? `${renderContext}:${archivedBucket ? 'archived' : 'active'}:${node.session.id}`;
   const createFolder = useSessionFoldersStore((state) => state.createFolder);
   const toggleFolderCollapse = useSessionFoldersStore((state) => state.toggleFolderCollapse);
   const showDeletionDialog = useUIStore((state) => state.showDeletionDialog);
@@ -121,16 +130,16 @@ export function SessionTreeItem({
     mobileVariant,
     allowReselect,
     onSessionSelected,
-    isSessionSearchOpen,
-    sessionSearchQuery,
-    setSessionSearchQuery,
-    setIsSessionSearchOpen,
+    resetSessionSearch,
     descendantIds,
     showDeletionDialog,
     setDeleteSessionConfirm,
     deleteSessionConfirm,
     editingId,
     setEditingId,
+    setEditingRowKey,
+    editingSessionId: node.session.id,
+    editingOccurrenceKey: effectiveRowKey,
     editTitle,
     setEditTitle,
   });
@@ -148,7 +157,9 @@ export function SessionTreeItem({
       normalizedSessionSearchQuery={normalizedSessionSearchQuery}
       notifyOnSubtasks={notifyOnSubtasks}
       editingId={editingId}
+      editingRowKey={editingRowKey}
       setEditingId={setEditingId}
+      setEditingRowKey={setEditingRowKey}
       editTitle={editTitle}
       setEditTitle={setEditTitle}
        handleSaveEdit={sessionActions.handleSaveEdit}
@@ -170,15 +181,19 @@ export function SessionTreeItem({
       depth={depth}
       groupDirectory={groupDirectory}
       projectId={projectId}
+      folderOwnerKey={folderOwnerKey}
+      selectionScopeKey={selectionScopeKey}
       archivedBucket={archivedBucket}
       secondaryMeta={secondaryMeta}
       renderContext={renderContext}
+      rowKey={effectiveRowKey}
+      dragKey={dragKey ?? rowKey ?? node.session.id}
       subtreeContainsEditing={renderExtras?.subtreeContainsEditing ?? EMPTY_SUBTREE_CONTAINS_EDITING}
       menuOpenSessionId={renderExtras?.menuOpenSessionId ?? null}
       nodeStructureKey={renderExtras?.nodeStructureKey ?? ''}
       relativeTimeTick={renderExtras?.relativeTimeTick}
     >
-      {node.children.map((child) => (
+      {renderChildren ? node.children.map((child) => (
         <SessionTreeItem
           key={child.session.id}
            node={child}
@@ -188,7 +203,9 @@ export function SessionTreeItem({
           normalizedSessionSearchQuery={normalizedSessionSearchQuery}
           notifyOnSubtasks={notifyOnSubtasks}
           editingId={editingId}
+          editingRowKey={editingRowKey}
           setEditingId={setEditingId}
+          setEditingRowKey={setEditingRowKey}
            editTitle={editTitle}
           setEditTitle={setEditTitle}
            toggleParent={toggleParent}
@@ -196,10 +213,7 @@ export function SessionTreeItem({
            setOpenSidebarMenuKey={setOpenSidebarMenuKey}
            allowReselect={allowReselect}
            onSessionSelected={onSessionSelected}
-           isSessionSearchOpen={isSessionSearchOpen}
-           sessionSearchQuery={sessionSearchQuery}
-           setSessionSearchQuery={setSessionSearchQuery}
-           setIsSessionSearchOpen={setIsSessionSearchOpen}
+           resetSessionSearch={resetSessionSearch}
            deleteSessionConfirm={deleteSessionConfirm}
            setDeleteSessionConfirm={setDeleteSessionConfirm}
             startFolderRename={startFolderRename}
@@ -207,10 +221,12 @@ export function SessionTreeItem({
            mobileVariant={mobileVariant}
            alwaysShowActions={alwaysShowActions}
            depth={depth + 1}
+           folderOwnerKey={folderOwnerKey}
+           selectionScopeKey={selectionScopeKey}
           {...childContext}
           renderExtras={childRenderExtrasFor?.(child)}
         />
-      ))}
+      )) : null}
     </SessionNodeItem>
     {deleteSessionConfirm?.session.id === node.session.id ? <SessionDeleteConfirmDialog
       value={deleteSessionConfirm}

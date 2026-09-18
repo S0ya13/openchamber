@@ -7,6 +7,7 @@ import { createInputHistoryIdentity, createInputHistorySubmission, selectInputHi
 import { useSessionFoldersStore } from '@/stores/useSessionFoldersStore';
 import { useInlineCommentDraftStore } from '@/stores/useInlineCommentDraftStore';
 import { isSessionPinned, useSessionPinnedStore } from '@/stores/useSessionPinnedStore';
+import { useSessionMultiSelectStore } from '@/stores/useSessionMultiSelectStore';
 import { cleanupPersistedSessionState } from './session-deletion-cleanup';
 
 describe('cleanupPersistedSessionState', () => {
@@ -16,6 +17,7 @@ describe('cleanupPersistedSessionState', () => {
     useSessionPinnedStore.setState({ ids: new Set(), touchedAt: {} });
     useSessionFoldersStore.setState({ foldersMap: {}, collapsedFolderIds: new Set() });
     useInputHistoryStore.setState({ globalBuckets: {}, sessionBuckets: {}, scope: 'session' });
+    useSessionMultiSelectStore.getState().disable();
   });
 
   test('clears persisted session state only for the deleted composite session', () => {
@@ -51,6 +53,7 @@ describe('cleanupPersistedSessionState', () => {
     useSessionFoldersStore.getState().addSessionToFolder('/repo-a', folder.id, 'session-1');
     const archivedFolder = useSessionFoldersStore.getState().createFolder('__archived__:/repo-a', 'Archived');
     useSessionFoldersStore.getState().addSessionToFolder('__archived__:/repo-a', archivedFolder.id, 'session-1');
+    useSessionMultiSelectStore.getState().toggleSelected('session-1', '/repo-a');
 
     cleanupPersistedSessionState({ runtimeKey, directory: '/repo-a', sessionId: 'session-1' });
 
@@ -64,15 +67,18 @@ describe('cleanupPersistedSessionState', () => {
     expect(isSessionPinned(useSessionPinnedStore.getState().ids, '/repo-b', 'session-1')).toBe(true);
     expect(useSessionFoldersStore.getState().getSessionFolderId('/repo-a', 'session-1')).toBeNull();
     expect(useSessionFoldersStore.getState().getSessionFolderId('__archived__:/repo-a', 'session-1')).toBeNull();
+    expect(useSessionMultiSelectStore.getState().selectedIds.has('session-1')).toBe(false);
   });
 
   test('rejects stale runtime cleanup', () => {
     const runtimeKey = getRuntimeKey();
     useSessionPinnedStore.getState().toggle({ directory: '/repo', sessionId: 'session-1' });
+    useSessionMultiSelectStore.getState().toggleSelected('session-1', '/repo');
 
     cleanupPersistedSessionState({ runtimeKey: `${runtimeKey}-stale`, directory: '/repo', sessionId: 'session-1' });
 
     expect(isSessionPinned(useSessionPinnedStore.getState().ids, '/repo', 'session-1')).toBe(true);
+    expect(useSessionMultiSelectStore.getState().selectedIds.has('session-1')).toBe(true);
   });
 
   test('removes only the deleted session input-history bucket', () => {

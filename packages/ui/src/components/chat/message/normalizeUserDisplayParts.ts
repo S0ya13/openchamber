@@ -78,6 +78,22 @@ const linkAttachmentPart = (part: TextPart): FilePart | null => {
                 filename: `${payload.identifier}: ${payload.title}`,
                 url: payload.url,
             };
+        case 'guest-issue':
+            return {
+                ...identity,
+                type: 'file',
+                mime: 'application/vnd.openchamber.guest-issue-link',
+                filename: `${payload.id}: ${payload.title}`,
+                url: payload.url,
+            };
+        case 'guest-pr':
+            return {
+                ...identity,
+                type: 'file',
+                mime: 'application/vnd.openchamber.guest-pr-link',
+                filename: `PR ${payload.id}: ${payload.title}`,
+                url: payload.url,
+            };
         default:
             return null;
     }

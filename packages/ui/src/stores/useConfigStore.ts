@@ -1,4 +1,6 @@
 import { create } from "zustand";
+import { AUTO_MODEL_ID, AUTO_PROVIDER_ID, isAutoModel } from '@/lib/routing/autoModel';
+import { selectAutoReady, useRoutingStore } from '@/stores/useRoutingStore';
 import type { StoreApi, UseBoundStore } from "zustand";
 import { devtools, persist } from "zustand/middleware";
 import type { Provider, Model, Agent, Config } from "@/lib/opencode/model";
@@ -213,6 +215,11 @@ const hasProviderModel = (
     providerId: string,
     modelId: string
 ): boolean => {
+    // Auto is not a provider OpenCode reports; it is a valid selection exactly
+    // while the server says routing can honour it.
+    if (isAutoModel(providerId, modelId)) {
+        return selectAutoReady(useRoutingStore.getState());
+    }
     const provider = providers.find((item) => item.id === providerId);
     if (!provider) {
         return false;
@@ -225,6 +232,7 @@ const resolveProviderModelSelection = ({
     currentProviderId,
     currentModelId,
     currentVariant,
+    preserveCurrent = false,
     settingsDefaultModel,
     settingsDefaultVariant,
     allowFallback,
@@ -233,6 +241,7 @@ const resolveProviderModelSelection = ({
     currentProviderId?: string;
     currentModelId?: string;
     currentVariant?: string;
+    preserveCurrent?: boolean;
     settingsDefaultModel?: string;
     settingsDefaultVariant?: string;
     allowFallback: boolean;
@@ -245,11 +254,11 @@ const resolveProviderModelSelection = ({
         return modelHasVariant(findProviderModel(providers, providerId, modelId), variant) ? variant : undefined;
     };
 
-    if (currentProviderId && currentModelId && hasProviderModel(providers, currentProviderId, currentModelId)) {
+    if (currentProviderId && currentModelId && (preserveCurrent || hasProviderModel(providers, currentProviderId, currentModelId))) {
         return {
             providerId: currentProviderId,
             modelId: currentModelId,
-            variant: resolveVariant(currentProviderId, currentModelId, currentVariant),
+            variant: preserveCurrent ? currentVariant : resolveVariant(currentProviderId, currentModelId, currentVariant),
         };
     }
 
@@ -290,7 +299,7 @@ type DefaultAgentModelSelection = {
 // Shared default-selection cascade used both at startup (loadAgents) and when opening a
 // fresh draft (applyDefaultModelAgentSelection), so the two paths stay identical.
 //
-//   Agent: settings.defaultAgent → opencode default_agent → build → first primary → first
+//   Agent: project.defaultAgent → settings.defaultAgent → opencode default_agent → build → first primary → first
 //   Model: project.defaultModel → settings.defaultModel → resolved agent's pinned model+variant → opencode config.model
 //          → opencode/big-pickle → first
 //
@@ -304,6 +313,7 @@ type DefaultAgentModelSelection = {
 const resolveDefaultAgentModelSelection = ({
     agents,
     providers,
+    projectDefaultAgent,
     projectDefaultModel,
     projectDefaultVariant,
     settingsDefaultAgent,
@@ -315,6 +325,7 @@ const resolveDefaultAgentModelSelection = ({
 }: {
     agents: Agent[];
     providers: ProviderWithModelList[];
+    projectDefaultAgent?: string;
     projectDefaultModel?: string;
     projectDefaultVariant?: string;
     settingsDefaultAgent?: string;
@@ -335,7 +346,10 @@ const resolveDefaultAgentModelSelection = ({
     const primaryAgents = agents.filter((agent) => isPrimaryMode(agent.mode));
 
     let resolvedAgent: Agent | undefined;
-    if (settingsDefaultAgent) {
+    if (projectDefaultAgent) {
+        resolvedAgent = agents.find((agent) => agent.name === projectDefaultAgent);
+    }
+    if (!resolvedAgent && settingsDefaultAgent) {
         resolvedAgent = agents.find((agent) => agent.name === settingsDefaultAgent);
     }
     if (!resolvedAgent && opencodeDefaultAgent) {
@@ -370,7 +384,7 @@ const resolveDefaultAgentModelSelection = ({
     }
 
     if (providerId || !allowFallback) {
-        return { agentName: resolvedAgent?.name ?? settingsDefaultAgent, providerId, modelId, variant };
+        return { agentName: resolvedAgent?.name ?? projectDefaultAgent ?? settingsDefaultAgent, providerId, modelId, variant };
     }
 
     if (!providerId
@@ -822,6 +836,22 @@ const getFallbackProjectDirectory = (): string | null => {
     }
 };
 
+const getProjectDefaultsForConfigDirectory = (directory: string | null | undefined) => {
+    const configDirectory = normalizeConfigPath(directory);
+    if (!configDirectory) {
+        return {};
+    }
+    const session = useSessionUIStore.getState();
+    if (!session.currentSessionId && session.newSessionDraft?.open && session.newSessionDraft.target === 'chat'
+        && toDirectoryKey(configDirectory) === useConfigStore.getState().activeDirectoryKey) return {};
+    const project = useProjectsStore.getState().projects.find((entry) => normalizeConfigPath(entry.path) === configDirectory);
+    return {
+        projectDefaultAgent: normalizeOptionalString(project?.defaultAgent),
+        projectDefaultModel: normalizeOptionalString(project?.defaultModel),
+        projectDefaultVariant: normalizeOptionalString(project?.defaultVariant),
+    };
+};
+
 /**
  * Map a directory to its CONFIG scope. Providers/agents/defaults are defined at
  * the PROJECT level (opencode.json), so a worktree must inherit its parent
@@ -921,6 +951,7 @@ interface DirectoryScopedConfig {
     currentProviderId: string;
     currentModelId: string;
     currentVariant?: string | undefined;
+    currentVariantSelection?: CurrentVariantSelection;
     currentAgentName: string | undefined;
     selectedProviderId: string;
     agentModelSelections: { [agentName: string]: { providerId: string; modelId: string } };
@@ -1007,19 +1038,7 @@ const createEmptyDirectoryScopedConfig = (
     selectionSource: "auto",
 });
 
-const hasValidVariant = (
-    providers: ProviderWithModelList[],
-    providerId: string,
-    modelId: string,
-    variant: string | undefined,
-): boolean => {
-    if (!variant) return true;
-    return modelHasVariant(findProviderModel(providers, providerId, modelId), variant);
-};
-
 const resolveSelectionWithManualGuard = ({
-    agents,
-    providers,
     currentAgentName,
     currentProviderId,
     currentModelId,
@@ -1030,8 +1049,6 @@ const resolveSelectionWithManualGuard = ({
     resolvedModelId,
     resolvedVariant,
 }: {
-    agents: Agent[];
-    providers: ProviderWithModelList[];
     currentAgentName: string | undefined;
     currentProviderId: string;
     currentModelId: string;
@@ -1042,13 +1059,9 @@ const resolveSelectionWithManualGuard = ({
     resolvedModelId: string | undefined;
     resolvedVariant: string | undefined;
 }) => {
-    const manualAgentName = currentAgentName && agents.some((agent) => agent.name === currentAgentName)
-        ? currentAgentName
-        : undefined;
+    const manualAgentName = currentAgentName;
     const manualModelValid = !!currentProviderId
-        && !!currentModelId
-        && hasProviderModel(providers, currentProviderId, currentModelId)
-        && hasValidVariant(providers, currentProviderId, currentModelId, currentVariant);
+        && !!currentModelId;
     const preserveManual = selectionSource === "manual" && (!!manualAgentName || manualModelValid);
 
     return {
@@ -1178,7 +1191,7 @@ interface ConfigStore {
     cycleCurrentVariant: () => string | undefined;
     getCurrentModelVariants: () => string[];
     setAgent: (agentName: string | undefined) => void;
-    applyDefaultModelAgentSelection: (options?: { projectDefaultModel?: string; projectDefaultVariant?: string }) => void;
+    applyDefaultModelAgentSelection: (options?: { projectDefaultAgent?: string; projectDefaultModel?: string; projectDefaultVariant?: string }) => void;
     applyOpenCodeConfigDefaults: (directory?: string | null, source?: string, config?: Config) => void;
     setSelectedProvider: (providerId: string) => void;
     setSettingsDefaultModel: (model: string | undefined) => void;
@@ -1234,6 +1247,27 @@ export const selectProvidersForDirectory = (
 };
 
 const EMPTY_PROVIDERS: ProviderWithModelList[] = [];
+const EMPTY_AGENTS: Agent[] = [];
+
+export const selectConfigAgentsForDirectory = (
+    state: Pick<ConfigStore, 'agents' | 'directoryScoped' | 'activeDirectoryKey'>,
+    directory?: string | null,
+): Agent[] => {
+    if (directory === undefined) return state.agents;
+    const key = toConfigDirectoryKey(directory);
+    return key === state.activeDirectoryKey ? state.agents : state.directoryScoped[key]?.agents ?? EMPTY_AGENTS;
+};
+
+export const selectCatalogLoadedForDirectory = (
+    state: Pick<ConfigStore, 'agentsLoaded' | 'providersLoaded' | 'directoryScoped' | 'activeDirectoryKey'>,
+    resource: 'models' | 'agents',
+    directory?: string | null,
+): boolean => {
+    const field = resource === 'models' ? 'providersLoaded' : 'agentsLoaded';
+    if (directory === undefined) return state[field];
+    const key = toConfigDirectoryKey(directory);
+    return key === state.activeDirectoryKey ? state[field] : state.directoryScoped[key]?.[field] === true;
+};
 
 /**
  * Whether a freshly fetched catalog carries the same providers and models as
@@ -1556,7 +1590,7 @@ export const useConfigStore = create<ConfigStore>()(
                                 currentProviderId: snapshot.currentProviderId,
                                 currentModelId: snapshot.currentModelId,
                                 currentVariant: snapshot.currentVariant,
-                                currentVariantSelection: { override: undefined, inherited: snapshot.currentVariant },
+                                currentVariantSelection: snapshot.currentVariantSelection ?? { override: undefined, inherited: snapshot.currentVariant },
                                 currentAgentName: snapshot.currentAgentName,
                                 selectedProviderId: snapshot.selectedProviderId,
                                 agentModelSelections: snapshot.agentModelSelections,
@@ -1776,14 +1810,15 @@ export const useConfigStore = create<ConfigStore>()(
                                 const currentVariant = state.activeDirectoryKey === directoryKey
                                     ? state.currentVariant
                                     : baseSnapshot.currentVariant;
-                                const project = useProjectsStore.getState().projects.find((entry) => toDirectoryKey(entry.path) === directoryKey);
+                                const projectDefaults = getProjectDefaultsForConfigDirectory(fromDirectoryKey(directoryKey));
                                 const resolvedModel = resolveProviderModelSelection({
                                     providers: nextProviders,
                                     currentProviderId,
                                     currentModelId,
                                     currentVariant,
-                                    settingsDefaultModel: project?.defaultModel || state.settingsDefaultModel,
-                                    settingsDefaultVariant: project?.defaultModel ? project.defaultVariant : state.settingsDefaultVariant,
+                                    preserveCurrent: (state.activeDirectoryKey === directoryKey ? state.selectionSource : baseSnapshot.selectionSource) === 'manual',
+                                    settingsDefaultModel: projectDefaults.projectDefaultModel || state.settingsDefaultModel,
+                                    settingsDefaultVariant: projectDefaults.projectDefaultModel ? projectDefaults.projectDefaultVariant : state.settingsDefaultVariant,
                                     allowFallback: state.settingsDefaultsLoaded,
                                 });
                                 const currentSelectedProviderId = state.activeDirectoryKey === directoryKey
@@ -1807,6 +1842,9 @@ export const useConfigStore = create<ConfigStore>()(
                                     currentProviderId: resolvedModel?.providerId ?? "",
                                     currentModelId: resolvedModel?.modelId ?? "",
                                     currentVariant: resolvedModel?.variant,
+                                    currentVariantSelection: (state.activeDirectoryKey === directoryKey ? state.selectionSource : baseSnapshot.selectionSource) === 'manual'
+                                        ? (state.activeDirectoryKey === directoryKey ? state.currentVariantSelection : baseSnapshot.currentVariantSelection)
+                                        : { override: undefined, inherited: resolvedModel?.variant },
                                     selectedProviderId,
                                 };
 
@@ -1845,6 +1883,7 @@ export const useConfigStore = create<ConfigStore>()(
                                     nextState.currentProviderId = nextSnapshot.currentProviderId;
                                     nextState.currentModelId = nextSnapshot.currentModelId;
                                     nextState.currentVariant = nextSnapshot.currentVariant;
+                                    nextState.currentVariantSelection = nextSnapshot.currentVariantSelection ?? { override: undefined, inherited: nextSnapshot.currentVariant };
                                     nextState.selectedProviderId = selectedProviderId;
                                 }
 
@@ -1961,13 +2000,14 @@ export const useConfigStore = create<ConfigStore>()(
                 setProvider: (providerId: string) => {
                     const { providers } = get();
                     const provider = providers.find((p) => p.id === providerId);
+                    const isAuto = providerId === AUTO_PROVIDER_ID && hasProviderModel(providers, AUTO_PROVIDER_ID, AUTO_MODEL_ID);
  
-                    if (!provider) {
+                    if (!provider && !isAuto) {
                         return;
                     }
  
-                    const firstModel = provider.models[0];
-                    const newModelId = firstModel?.modelID || "";
+                    const firstModel = provider?.models[0];
+                    const newModelId = isAuto ? AUTO_MODEL_ID : (firstModel?.modelID || "");
  
                     set((state) => {
                         const directoryKey = state.activeDirectoryKey;
@@ -2071,6 +2111,7 @@ export const useConfigStore = create<ConfigStore>()(
                                 [directoryKey]: {
                                     ...baseSnapshot,
                                     currentVariant,
+                                    currentVariantSelection: { override, inherited },
                                     selectionSource: "manual",
                                 },
                             },
@@ -2210,10 +2251,10 @@ export const useConfigStore = create<ConfigStore>()(
                         return next;
                     });
                     const state = get();
-                    const project = useProjectsStore.getState().projects.find((entry) => toDirectoryKey(entry.path) === state.activeDirectoryKey);
+                    const projectDefaults = getProjectDefaultsForConfigDirectory(fromDirectoryKey(state.activeDirectoryKey));
                     if (!useSessionUIStore.getState().currentSessionId && state.selectionSource === 'auto'
-                        && (project?.defaultModel || state.settingsDefaultModel)) {
-                        state.applyDefaultModelAgentSelection({ projectDefaultModel: project?.defaultModel, projectDefaultVariant: project?.defaultVariant });
+                        && (projectDefaults.projectDefaultModel || state.settingsDefaultModel)) {
+                        state.applyDefaultModelAgentSelection(projectDefaults);
                     }
                     markStartupTrace('config.defaults:published');
                     return true;
@@ -2363,8 +2404,7 @@ export const useConfigStore = create<ConfigStore>()(
 
                             if (safeAgents.length === 0) {
                                 if (get().activeDirectoryKey === directoryKey && !useSessionUIStore.getState().currentSessionId && get().selectionSource === 'auto') {
-                                    const project = useProjectsStore.getState().projects.find((entry) => toDirectoryKey(entry.path) === directoryKey);
-                                    get().applyDefaultModelAgentSelection({ projectDefaultModel: project?.defaultModel, projectDefaultVariant: project?.defaultVariant });
+                                    get().applyDefaultModelAgentSelection(getProjectDefaultsForConfigDirectory(fromDirectoryKey(directoryKey)));
                                 }
                                 if (!isConfigRuntimeContextCurrent(runtimeContext)) return false;
                                 set((state) => {
@@ -2418,14 +2458,12 @@ export const useConfigStore = create<ConfigStore>()(
                             }
 
                             // Resolve agent + model via the shared cascade:
-                            //   settings.defaultAgent → opencode default_agent → build → first primary → first
-                            //   settings.defaultModel → resolved agent's model+variant → opencode/big-pickle → first
-                            const project = useProjectsStore.getState().projects.find((entry) => toDirectoryKey(entry.path) === directoryKey);
+                            //   project.defaultAgent → settings.defaultAgent → opencode default_agent → build → first primary → first
+                            //   project.defaultModel → settings.defaultModel → resolved agent's model+variant → opencode/big-pickle → first
                             const resolvedDefault = resolveDefaultAgentModelSelection({
                                 agents: safeAgents,
                                 providers,
-                                projectDefaultModel: project?.defaultModel,
-                                projectDefaultVariant: project?.defaultVariant,
+                                ...getProjectDefaultsForConfigDirectory(configDirectoryPath),
                                 settingsDefaultAgent: get().settingsDefaultAgent,
                                 settingsDefaultModel: get().settingsDefaultModel,
                                 settingsDefaultVariant: get().settingsDefaultVariant,
@@ -2458,8 +2496,6 @@ export const useConfigStore = create<ConfigStore>()(
                                 const currentVariant = isActive ? state.currentVariant : baseSnapshot.currentVariant;
                                 const selectionSource = isActive ? state.selectionSource : (baseSnapshot.selectionSource ?? "auto");
                                 const nextSelection = resolveSelectionWithManualGuard({
-                                    agents: safeAgents,
-                                    providers,
                                     currentAgentName,
                                     currentProviderId,
                                     currentModelId,
@@ -2480,6 +2516,9 @@ export const useConfigStore = create<ConfigStore>()(
                                     currentProviderId: nextSelection.providerId ?? baseSnapshot.currentProviderId,
                                     currentModelId: nextSelection.modelId ?? baseSnapshot.currentModelId,
                                     currentVariant: nextSelection.variant,
+                                    currentVariantSelection: nextSelection.selectionSource === 'manual'
+                                        ? (isActive ? state.currentVariantSelection : baseSnapshot.currentVariantSelection)
+                                        : { override: undefined, inherited: nextSelection.variant },
                                     opencodeDefaultAgent,
                                     opencodeDefaultModel,
                                     selectionSource: nextSelection.selectionSource,
@@ -2501,6 +2540,7 @@ export const useConfigStore = create<ConfigStore>()(
                                         nextState.currentProviderId = nextSelection.providerId;
                                         nextState.currentModelId = nextSelection.modelId;
                                         nextState.currentVariant = nextSelection.variant;
+                                        nextState.currentVariantSelection = nextSnapshot.currentVariantSelection ?? { override: undefined, inherited: nextSelection.variant };
                                     }
                                     nextState.selectionSource = nextSelection.selectionSource;
                                 }
@@ -2695,6 +2735,7 @@ export const useConfigStore = create<ConfigStore>()(
                                     currentProviderId: providerId,
                                     currentModelId: modelId,
                                     currentVariant: variant,
+                                    currentVariantSelection: variantSelection,
                                     selectionSource: "manual",
                                 };
 
@@ -2718,10 +2759,15 @@ export const useConfigStore = create<ConfigStore>()(
                             agentVariant?: string,
                         ): CurrentVariantSelection => {
                             const model = findProviderModel(providers, providerId, modelId);
-                            if (!model || model.variants.length === 0) return { override: undefined, inherited: undefined };
+                            if (model && model.variants.length === 0) return { override: undefined, inherited: undefined };
 
+                            // A model the catalog does not list (Auto, or a stale
+                            // selection) cannot rule a variant out, so inherited
+                            // choices stand until a real model contradicts them.
                             const isAvailable = (candidate: string | null | undefined): candidate is string => (
-                                modelHasVariant(model, candidate)
+                                candidate !== null
+                                && candidate !== undefined
+                                && (!model || modelHasVariant(model, candidate))
                             );
 
                             const inherited = [agentVariant, settingsDefaultVariant].find(isAvailable);
@@ -2761,7 +2807,7 @@ export const useConfigStore = create<ConfigStore>()(
                         // (issue #2404).
                         if (currentSessionId) {
                             const existingAgentModel = useSelectionStore.getState().getAgentModelForSession(currentSessionId, agentName);
-                            if (existingAgentModel && hasProviderModel(providers, existingAgentModel.providerId, existingAgentModel.modelId)) {
+                            if (existingAgentModel) {
                                 applyResolvedModelSelection(
                                     existingAgentModel.providerId,
                                     existingAgentModel.modelId,
@@ -2792,7 +2838,6 @@ export const useConfigStore = create<ConfigStore>()(
                             hadManualSelection
                             && currentProviderId
                             && currentModelId
-                            && hasProviderModel(providers, currentProviderId, currentModelId)
                         ) {
                             // Keeping the pair in memory is not enough: without a write
                             // the settings default wins again after a reload. The removed
@@ -2827,6 +2872,7 @@ export const useConfigStore = create<ConfigStore>()(
                 // Used when entering a fresh draft session so model/agent reset to defaults
                 // instead of sticking to the previously open session's selection.
                 applyDefaultModelAgentSelection: (options) => {
+                    const projectDefaults = options ?? getProjectDefaultsForConfigDirectory(fromDirectoryKey(get().activeDirectoryKey));
                     const {
                         agents,
                         providers,
@@ -2845,8 +2891,7 @@ export const useConfigStore = create<ConfigStore>()(
                     } = resolveDefaultAgentModelSelection({
                         agents,
                         providers,
-                        projectDefaultModel: options?.projectDefaultModel,
-                        projectDefaultVariant: options?.projectDefaultVariant,
+                        ...projectDefaults,
                         settingsDefaultAgent,
                         settingsDefaultModel,
                         settingsDefaultVariant,
@@ -2875,6 +2920,7 @@ export const useConfigStore = create<ConfigStore>()(
                             currentProviderId: resolvedProviderId ?? '',
                             currentModelId: resolvedModelId ?? '',
                             currentVariant: resolvedVariant,
+                            currentVariantSelection: { override: undefined, inherited: resolvedVariant },
                             selectionSource: "auto",
                         };
 
@@ -2883,7 +2929,7 @@ export const useConfigStore = create<ConfigStore>()(
                             currentProviderId: nextSnapshot.currentProviderId,
                             currentModelId: nextSnapshot.currentModelId,
                             currentVariant: resolvedVariant,
-                            currentVariantSelection: { override: resolvedVariant, inherited: resolvedVariant },
+                            currentVariantSelection: { override: undefined, inherited: resolvedVariant },
                             selectionSource: "auto",
                             directoryScoped: {
                                 ...state.directoryScoped,
@@ -2908,6 +2954,7 @@ export const useConfigStore = create<ConfigStore>()(
 
                     const opencodeDefaultAgent = normalizeOptionalString(syncedConfig.default_agent);
                     const opencodeDefaultModel = normalizeOptionalString(syncedConfig.model);
+                    const projectDefaults = getProjectDefaultsForConfigDirectory(configDirectory);
 
                     set((state) => {
                         const snapshot = state.directoryScoped[directoryKey];
@@ -2949,12 +2996,12 @@ export const useConfigStore = create<ConfigStore>()(
                             return nextState;
                         }
 
-                        const project = useProjectsStore.getState().projects.find((entry) => toDirectoryKey(entry.path) === directoryKey);
                         const resolved = resolveDefaultAgentModelSelection({
                             agents,
                             providers,
-                            projectDefaultModel: project?.defaultModel,
-                            projectDefaultVariant: project?.defaultVariant,
+                            projectDefaultAgent: projectDefaults.projectDefaultAgent,
+                            projectDefaultModel: projectDefaults.projectDefaultModel,
+                            projectDefaultVariant: projectDefaults.projectDefaultVariant,
                             settingsDefaultAgent: state.settingsDefaultAgent,
                             settingsDefaultModel: state.settingsDefaultModel,
                             settingsDefaultVariant: state.settingsDefaultVariant,
@@ -2975,8 +3022,6 @@ export const useConfigStore = create<ConfigStore>()(
                         const currentModelId = isActive ? state.currentModelId : baseSnapshot.currentModelId;
                         const currentVariant = isActive ? state.currentVariant : baseSnapshot.currentVariant;
                         const nextSelection = resolveSelectionWithManualGuard({
-                            agents,
-                            providers,
                             currentAgentName,
                             currentProviderId,
                             currentModelId,
@@ -2993,6 +3038,9 @@ export const useConfigStore = create<ConfigStore>()(
                             providers,
                             agents,
                             currentAgentName: nextSelection.agentName,
+                            currentVariantSelection: nextSelection.selectionSource === 'manual'
+                                ? (isActive ? state.currentVariantSelection : baseSnapshot.currentVariantSelection)
+                                : { override: undefined, inherited: nextSelection.variant },
                             ...(nextSelection.providerId && nextSelection.modelId
                                 ? {
                                     currentProviderId: nextSelection.providerId,
@@ -3035,6 +3083,7 @@ export const useConfigStore = create<ConfigStore>()(
                                 nextState.currentProviderId = nextSelection.providerId;
                                 nextState.currentModelId = nextSelection.modelId;
                                 nextState.currentVariant = nextSelection.variant;
+                                nextState.currentVariantSelection = nextSnapshot.currentVariantSelection ?? { override: undefined, inherited: nextSelection.variant };
                             }
                         }
 
@@ -3613,6 +3662,7 @@ export const useConfigStore = create<ConfigStore>()(
                     currentProviderId: state.currentProviderId,
                     currentModelId: state.currentModelId,
                     currentVariant: state.currentVariant,
+                    currentVariantSelection: state.currentVariantSelection,
                     currentAgentName: state.currentAgentName,
                     selectedProviderId: sanitizePersistedSelectedProviderId(state.selectedProviderId),
                     agentModelSelections: state.agentModelSelections,

@@ -1,6 +1,10 @@
 import express from 'express';
 import { OpenCode } from '@opencode/client';
-import { createWorktree as createWorktreeDefault, getWorktreeBootstrapStatus as getWorktreeBootstrapStatusDefault } from '../git/index.js';
+import {
+  createWorktree as createWorktreeDefault,
+  getWorktreeBootstrapStatus as getWorktreeBootstrapStatusDefault,
+  resolvePrimaryWorktreeRoot,
+} from '../git/index.js';
 import { expandSnippets } from '../opencode/snippets.js';
 import { parseScheduledCommandPrompt } from '../scheduled-tasks/runtime.js';
 import { buildGoalIntroText, createSessionGoal } from '../session-goal/create.js';
@@ -77,7 +81,10 @@ const resolveVariant = (models, providerID, modelID, variant) => {
   const normalized = asNonEmptyString(variant);
   if (!normalized) return undefined;
   const model = findCatalogModel(models, providerID, modelID);
-  return asList(model?.variants).some((entry) => entry?.id === normalized) ? normalized : undefined;
+  // A model the catalog does not know yet (cold or unreachable) keeps the
+  // user's saved variant instead of losing it to a discovery gap.
+  if (!model) return normalized;
+  return asList(model.variants).some((entry) => entry?.id === normalized) ? normalized : undefined;
 };
 
 // Config `model` is either "providerID/modelID" or the expanded object form.
@@ -86,6 +93,18 @@ const parseConfigModel = (value) => {
   const providerID = asNonEmptyString(value?.providerID);
   const modelID = asNonEmptyString(value?.model);
   return providerID && modelID ? { providerID, modelID } : null;
+};
+
+const resolveProjectDefaults = (settings, directory, projectId) => {
+  const projects = Array.isArray(settings?.projects) ? settings.projects : [];
+  const matchedProject = projectId
+    ? projects.find((entry) => entry?.id === projectId) || null
+    : projects.find((entry) => entry?.path === directory) || null;
+  return {
+    defaultAgent: asNonEmptyString(matchedProject?.defaultAgent),
+    defaultModel: asNonEmptyString(matchedProject?.defaultModel),
+    defaultVariant: asNonEmptyString(matchedProject?.defaultVariant),
+  };
 };
 
 /** `x-opencode-directory` is how v2 scopes a request; there is no query param. */
@@ -133,19 +152,23 @@ const fetchSelectionInputs = async ({ client, readSettingsFromDiskMigrated }) =>
   return { settings, models, agents, opencodeDefaultAgent, opencodeDefaultModel };
 };
 
-const resolveDefaultSelection = ({ agents, models, settings, opencodeDefaultAgent, opencodeDefaultModel }) => {
+const resolveDefaultSelection = ({ agents, models, settings, projectDefaults, opencodeDefaultAgent, opencodeDefaultModel }) => {
   const primaryAgents = agents.filter((agent) => isPrimaryAgentMode(agent?.mode) && agent?.hidden !== true);
   let resolvedAgent = null;
+  const projectDefaultAgent = asNonEmptyString(projectDefaults?.defaultAgent);
   const settingsDefaultAgent = asNonEmptyString(settings?.defaultAgent);
-  if (settingsDefaultAgent) {
-    // v1 stored the agent's display name; v2 agents are addressed by id
-    // (`build` vs `Build`), so a setting saved before the upgrade still resolves.
-    const wanted = settingsDefaultAgent.toLowerCase();
-    resolvedAgent = agents.find((agent) => agent?.id === settingsDefaultAgent)
+  // The project's default agent wins over the global one. v1 stored the agent's
+  // display name; v2 agents are addressed by id (`build` vs `Build`), so a
+  // setting saved before the upgrade still resolves.
+  const findAgentBySetting = (wantedName) => {
+    const wanted = wantedName.toLowerCase();
+    return agents.find((agent) => agent?.id === wantedName)
       || agents.find((agent) => typeof agent?.name === 'string' && agent.name.toLowerCase() === wanted)
       || agents.find((agent) => typeof agent?.id === 'string' && agent.id.toLowerCase() === wanted)
       || null;
-  }
+  };
+  if (projectDefaultAgent) resolvedAgent = findAgentBySetting(projectDefaultAgent);
+  if (!resolvedAgent && settingsDefaultAgent) resolvedAgent = findAgentBySetting(settingsDefaultAgent);
   if (!resolvedAgent && opencodeDefaultAgent) {
     const candidate = agents.find((agent) => agent?.id === opencodeDefaultAgent) || null;
     if (candidate && isPrimaryAgentMode(candidate.mode) && candidate.hidden !== true) {
@@ -158,22 +181,27 @@ const resolveDefaultSelection = ({ agents, models, settings, opencodeDefaultAgen
 
   let model = null;
   let variant;
+  const projectDefaultModel = parseConfigModel(projectDefaults?.defaultModel);
   const settingsDefaultModel = parseConfigModel(settings?.defaultModel);
-  if (settingsDefaultModel && hasCatalogModel(models, settingsDefaultModel.providerID, settingsDefaultModel.modelID)) {
+  // A saved choice is honoured even when the catalog has not listed it yet: a
+  // discovery gap must not silently move the user onto another model.
+  if (projectDefaultModel) {
+    model = projectDefaultModel;
+    variant = resolveVariant(models, model.providerID, model.modelID, projectDefaults?.defaultVariant);
+  }
+  if (!model && settingsDefaultModel) {
     model = settingsDefaultModel;
     variant = resolveVariant(models, model.providerID, model.modelID, settings?.defaultVariant);
   }
 
   // An agent's model is a v2 `ModelRef`: `id` is the model id, not a composite.
   const agentModel = resolvedAgent?.model;
-  if (!model && asNonEmptyString(agentModel?.providerID) && asNonEmptyString(agentModel?.id)
-    && hasCatalogModel(models, agentModel.providerID, agentModel.id)) {
+  if (!model && asNonEmptyString(agentModel?.providerID) && asNonEmptyString(agentModel?.id)) {
     model = { providerID: agentModel.providerID, modelID: agentModel.id };
     variant = resolveVariant(models, model.providerID, model.modelID, agentModel.variant);
   }
 
-  if (!model && opencodeDefaultModel
-    && hasCatalogModel(models, opencodeDefaultModel.providerID, opencodeDefaultModel.modelID)) {
+  if (!model && opencodeDefaultModel) {
     model = opencodeDefaultModel;
   }
 
@@ -305,9 +333,15 @@ const resolveRequestedDirectory = async ({ payload, readSettingsFromDiskMigrated
 
   const directory = asNonEmptyString(payload?.directory);
   const validated = await validateDirectoryPath(directory);
-  return validated.ok
-    ? { ok: true, directory: validated.directory }
-    : { ok: false, status: 400, error: validated.error || 'Invalid directory' };
+  if (!validated.ok) return { ok: false, status: 400, error: validated.error || 'Invalid directory' };
+  const settings = await readSettingsFromDiskMigrated();
+  const projects = sanitizeProjects(settings?.projects || []);
+  let project = projects.find((entry) => entry.path === validated.directory);
+  if (!project && projects.length > 0) {
+    const { root } = await resolvePrimaryWorktreeRoot(validated.directory);
+    project = projects.find((entry) => entry.path === root);
+  }
+  return { ok: true, directory: validated.directory, ...(project ? { projectId: project.id } : {}) };
 };
 
 // createWorktree returns while the worktree is still being populated in the
@@ -451,6 +485,7 @@ export const createOpenChamberSessionService = (dependencies) => {
     authHeaders,
     sessionID,
     directory,
+    projectId,
     prompt,
     goalInput,
     requestedModel,
@@ -473,7 +508,10 @@ export const createOpenChamberSessionService = (dependencies) => {
     }
     if (!model || !agent) {
       const inputs = await fetchSelectionInputs({ client, readSettingsFromDiskMigrated });
-      const defaults = resolveDefaultSelection(inputs);
+      const defaults = resolveDefaultSelection({
+        ...inputs,
+        projectDefaults: resolveProjectDefaults(inputs.settings, directory, projectId),
+      });
       if (!model) {
         model = defaults.model;
         if (variant == null) variant = defaults.variant;
@@ -759,6 +797,7 @@ export const createOpenChamberSessionService = (dependencies) => {
         authHeaders,
         sessionID,
         directory: sessionDirectory,
+        projectId: resolvedDirectory.projectId,
         prompt,
         goalInput,
         requestedModel: model,
@@ -860,6 +899,7 @@ export const createOpenChamberSessionService = (dependencies) => {
         authHeaders,
         sessionID: targetSessionID,
         directory,
+        projectId: resolvedDirectory.projectId,
         prompt,
         goalInput,
         requestedModel,

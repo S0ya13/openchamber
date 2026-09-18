@@ -85,4 +85,25 @@ describe('getActiveAssistantContext', () => {
             model: null,
         });
     });
+
+    test('shows no model while a prompt sent after a finished turn waits for its answer', () => {
+        // A v2 user message records no model, so the model of the turn about to
+        // run is unknown (the composer may have switched models, or be routing
+        // through Auto). Naming the previous turn's model would name the wrong one.
+        const previousAssistant = { ...assistantMessage('assistant_1', 'anthropic', 'claude-opus-4-1'), time: { created: 2, completed: 3 } };
+
+        expect(getActiveAssistantContext([userMessage('user_1'), previousAssistant, userMessage('user_2')])).toEqual({
+            assistantId: previousAssistant.id,
+            model: null,
+        });
+    });
+
+    test('a turn still running keeps its model when a prompt is queued behind it', () => {
+        const running = assistantMessage('assistant_1', 'anthropic', 'claude-opus-4-1');
+
+        expect(getActiveAssistantContext([userMessage('user_1'), running, userMessage('user_2')])).toEqual({
+            assistantId: running.id,
+            model: { providerId: 'anthropic', modelId: 'claude-opus-4-1' },
+        });
+    });
 });

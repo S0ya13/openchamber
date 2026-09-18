@@ -38,6 +38,7 @@ const createOpenCode = () => {
     tail: [],
     commands: [],
     sent: [],
+    switched: [],
     failNext: null,
   };
   // v2 wraps `/api/*` payloads in `{ location, data }`; a message page is
@@ -54,6 +55,8 @@ const createOpenCode = () => {
     if (pathname.endsWith('/message')) return Response.json({ data: state.tail, cursor: {} });
     if (pathname === '/api/command') return wrapped(state.commands);
     if (method === 'POST' && (pathname.endsWith('/model') || pathname.endsWith('/agent'))) {
+      // Kept apart from `sent`: switching the session is not a message.
+      state.switched.push({ path: pathname, body: JSON.parse(init.body) });
       return new Response(null, { status: 204 });
     }
     if (method === 'POST' && (pathname.endsWith('/prompt') || pathname.endsWith('/command') || pathname.endsWith('/synthetic'))) {
@@ -65,7 +68,7 @@ const createOpenCode = () => {
   return { state, fetchImpl };
 };
 
-const createRuntime = ({ dataDir = makeDataDir(), openCode = createOpenCode(), knowledge = null, retryDelayMs } = {}) => {
+const createRuntime = ({ dataDir = makeDataDir(), openCode = createOpenCode(), knowledge = null, retryDelayMs, resolveAutoSelection } = {}) => {
   let eventHandler = () => {};
   let statusHandler = () => {};
   const broadcasts = [];
@@ -86,6 +89,7 @@ const createRuntime = ({ dataDir = makeDataDir(), openCode = createOpenCode(), k
     abortHoldMs: 50,
   };
   if (retryDelayMs) options.retryDelayMs = retryDelayMs;
+  if (resolveAutoSelection) options.resolveAutoSelection = resolveAutoSelection;
   const runtime = createMessageQueueRuntime(options);
   return {
     runtime,
@@ -102,6 +106,38 @@ const createRuntime = ({ dataDir = makeDataDir(), openCode = createOpenCode(), k
 const settle = async (ms = 30) => {
   await new Promise((resolve) => setTimeout(resolve, ms));
 };
+
+describe('auto routing', () => {
+  it('switches a queued prompt and a queued command onto the routed model and agent', async () => {
+    const resolveAutoSelection = vi.fn(async ({ model }) => (model?.id === 'auto'
+      ? { model: { providerID: 'openai', id: 'gpt-6-astra' }, agent: 'plan', decision: {} }
+      : null));
+    const { runtime, openCode, emit } = createRuntime({ resolveAutoSelection });
+    runtime.start();
+    openCode.state.statuses = { [SESSION]: { type: 'busy' } };
+    openCode.state.commands = [{ name: 'review', template: 'Review $ARGUMENTS' }];
+    const auto = { providerID: 'openchamber', modelID: 'auto', agent: 'build' };
+    await runtime.enqueue(SESSION, DIRECTORY, item({ content: 'plain', text: 'plain', sendConfig: auto }));
+    await runtime.enqueue(SESSION, DIRECTORY, item({ content: '/review src', text: '/review src', sendConfig: auto }));
+
+    openCode.state.statuses = {};
+    emit({ type: 'session.status', properties: { sessionID: SESSION, status: { type: 'idle' } } });
+    await settle();
+    emit({ type: 'session.status', properties: { sessionID: SESSION, status: { type: 'idle' } } });
+    await settle();
+
+    // v2 carries no model in a prompt body: the session is switched first.
+    const switched = openCode.state.switched.filter((entry) => entry.path.endsWith('/model'));
+    expect(switched.map((entry) => entry.body.model)).toEqual([
+      { providerID: 'openai', id: 'gpt-6-astra' },
+      { providerID: 'openai', id: 'gpt-6-astra' },
+    ]);
+    expect(openCode.state.switched.filter((entry) => entry.path.endsWith('/agent')).map((entry) => entry.body.agent))
+      .toEqual(['plan', 'plan']);
+    expect(resolveAutoSelection).toHaveBeenCalledTimes(2);
+    expect(resolveAutoSelection.mock.calls[0][0]).toMatchObject({ sessionId: SESSION, directory: DIRECTORY, requestText: 'plain' });
+  });
+});
 
 describe('parseQueuedItemInput', () => {
   it('rejects an item the server could not deliver later', () => {

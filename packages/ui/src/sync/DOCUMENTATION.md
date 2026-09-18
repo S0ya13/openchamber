@@ -52,7 +52,7 @@ So:
 | `viewport-store.ts` | Scroll anchors, session memory, loading indicators | App UI state |
 | `attachment-files.ts` | Attachment picker allowlists, MIME/content validation, structured-text sanitization, and HEIC conversion | Local chat attachments across shared UI runtimes |
 | `document-attachments.ts` | Bounded Office/OpenDocument extraction, document text serialization, embedded-image extraction, and positional citations | DOCX, PPTX, XLSX, ODT, ODP, and ODS chat attachments |
-| `input-store.ts` | Draft input state, attached files, synthetic parts, destination-scoped fork replay handoff | App UI state; fork replay targets runtime + directory + session |
+| `input-store.ts` | Draft input state, attached files, synthetic parts, pending guest attach, destination-scoped fork replay handoff | Attachments and fork replay target runtime + directory + session; other pending input is app UI state |
 | `selection-store.ts` | Model/agent/variant selections | App UI state |
 | `voice-store.ts` | Voice state | App UI state |
 
@@ -61,6 +61,8 @@ Local chat attachments are normalized by `attachment-files.ts` before entering `
 Office and OpenDocument packages are metadata-validated before asynchronous extraction, with limits of 20 MB compressed input, 5,000 archive entries, 25 MB per entry, 8 MB per XML part, and 100 MB total uncompressed content. Unsafe or non-canonical archive paths reject the whole attachment, and only XML, relationship, and supported image entries are decompressed and retained. Extracted text, including its explicit truncation notice, is bounded to 500,000 characters so compact but dense Office files cannot consume an entire model context window. XLSX dense rows are serialized as quoted TSV under a single source range instead of repeating every cell address; highly sparse rows retain explicit cell coordinates so distant cells do not generate vast empty TSV spans. Confirmed Office/OpenDocument `@file` mentions are loaded through the runtime filesystem route before submit and use this same extraction pipeline instead of being forwarded as `text/plain` `file://` parts that OpenCode rejects as binary. A failed mention load or extraction leaves the composer intact, and a runtime switch discards preparation from the previous runtime. At most 50 signature-validated PNG, JPEG, GIF, or WebP images and 40 MB of image bytes are retained, with a 20 MB per-image limit; unsupported, invalid, omitted, and truncated content remains explicit in the extracted text. Images whose citations fall beyond text truncation are not attached. Extracted document content remains a `text/plain` file attachment with the original document filename, rather than becoming visible user-message text. Supported embedded images become separate image file parts; the extracted text contains `[filename]` citations at the source paragraph, slide object, spreadsheet cell anchor, or OpenDocument text position. Generated image filenames are re-evaluated if the composer changes during asynchronous preparation, avoiding collisions. The store publishes all generated parts atomically only after every data URL is ready.
 
 The composer compares normalized attachment MIME types with the selected model's declared input modalities. It warns when a newly attached file or an existing attachment after a model change requires an unsupported modality, but does not block sending. Missing modality metadata remains unknown and does not produce a warning.
+
+Attachment drafts stay in memory for the page's lifetime, including composer remounts, independently of text persistence. `selectAttachmentDraft` saves the outgoing list and restores the rendered composer's runtime, directory, and session before paint. Switching cancels unfinished attachment reads. Send and queue recovery pass their captured draft identity so a late failure restores files to the source rather than the currently open session. Clearing or deleting a draft releases only its files. Opening a new-session draft leaves the outgoing session's files available for a return visit.
 
 ## Catalog changes apply live
 
@@ -107,6 +109,19 @@ same runtime and draft object and yields to a manual choice made while loading.
 The config store owns default selection and discovery-gap behavior, documented
 in `packages/ui/src/stores/DOCUMENTATION.md`.
 
+Changing a draft's project or switching between Project and Chat applies the
+target's agent, model, and effort defaults immediately. Worktree refinement
+within the same project preserves manual choices. Activation continuations
+check the runtime, draft identity, target revision, and manual-selection state
+before applying defaults again.
+
+`selection-store.ts` persists runtime/session-keyed effort overrides alongside model and
+agent choices. Both a named effort and explicit `Default` survive reload, with
+the same 150-session persistence bound as the existing selections. Old payloads
+without effort entries remain valid; malformed effort entries grant no authority.
+Session deletion clears these entries. A saved effort choice precedes older
+message history so a reload cannot undo an unsent picker change.
+
 ### Layout-mounted session-list lifecycle
 
 `MainLayout` and `VSCodeLayout` each call `useSessionListSync({ isVSCode })` directly and unconditionally, outside Sidebar visibility, responsive, editor, settings, and compact-view branches. The hook selects the real topology inputs, publishes complete directory bootstrap demand through `ChildStoreManager`, refreshes topology additions (including all VS Code directories on its first mount), coalesces OpenChamber control events for 500ms, and supplies a memoized complete global active+archived input to authoritative cleanup. The root-level global poller owns the initial global refresh. MainLayout includes available worktrees; VS Code intentionally excludes them. Sidebar-local `session-created` worktree discovery is separate and full-app-only.
@@ -126,6 +141,7 @@ in `packages/ui/src/stores/DOCUMENTATION.md`.
 - Session pages and background reads share a three-request budget, with at most two running in either lane. Background work cannot consume the third slot, leaving capacity for lists even when two background reads stall. Queued lists take precedence over background work; active-session status recovery outranks queued metadata within the background lane. Retry backoff holds no network slot. Independent background reads can still progress concurrently.
 - Session pagination retries each failed page at most three times. The directory loader does not replay the whole list after those attempts, so one unavailable page cannot multiply retries or redownload earlier pages while holding its scheduler slot. The VS Code empty-success recovery remains separate.
 - A mounted directory-store consumer pins that store for its lifetime. Eviction may dispose only unmounted directories, so optimistic actions and realtime events cannot move to a replacement store while visible React consumers remain subscribed to an older identity.
+- Selected, active-project, expanded, and visible bootstrap demand also protects a store from eviction. This keeps virtualized off-screen directories alive while their owner still needs them; background demand remains evictable so the complete known topology does not make the cache unbounded.
 - Reconfiguration and runtime switching invalidate stale generations. A stale completion must not publish state into the new runtime.
 - Failure is recorded as `failed`; it is not converted into a successful empty snapshot. Forced demand can retry failed or completed work.
 - A failed bootstrap is classified as `os-permission` only when the owning runtime filesystem API independently confirms `EPERM`/`EACCES` for that exact directory. OpenCode/proxy error text is never used as permission evidence. The scheduler retains the directory-scoped reason so local Desktop can offer native folder selection before a forced retry.
@@ -213,6 +229,10 @@ state and shows loading or fetch failure separately from an eligible count.
 
 ### Live cross-directory session/status view
 
+Extension session subscriptions project these same stores through `lib/guests/workspace.ts`; they own no poller or git discovery. `global-session-status.observedById` retains explicit live activity/outcomes for at most 2,000 sessions in memory. A status snapshot can establish current activity but does not manufacture a successful turn. An error followed by idle retains its failed outcome until another run starts; runtime reset clears observations. Extension task status remains extension-owned.
+
+The session creation action accepts `navigation: "preserve"` for background extension launches. It still registers the returned directory, initializes message loading, marks the session as OpenChamber-created, and updates the global cache, but never selects it. Explicit guest `openSession` performs selection later. `session-ui-store.worktreeDiscoveryByProject` publishes topology loading/ready/error separately from retained worktree records; the existing sidebar discovery and control-event refresh own these flags.
+
 Use the sync hooks backed by aggregated child stores when the UI needs **live truth** for sessions or statuses across all initialized directories.
 
 Current consumers:
@@ -265,6 +285,10 @@ VS Code does not run the server permission-auto-accept runtime. The extension ho
 This keeps cold/global lists responsive without requiring a refetch after every change.
 
 Live activity/status indicators must not depend on this cache. They must use the event/snapshot-reconciled global live status index.
+
+### Viewed sessions and surface attention
+
+A `session.idle` or `session.error` for the selected session is recorded as viewed only while the user can see this surface; otherwise it raises an unread marker. `lib/surfaceAttention.ts` owns that answer. Web, desktop, and mobile use document focus; on web and desktop, `App.tsx` also marks the selected session viewed when the window regains focus. A VS Code webview document's focus does not track what the user sees: it loses focus whenever the code editor takes it while the chat stays on screen, and it can keep focus while VS Code is in the background. There the extension host reports window focus and webview visibility (`viewerStateChanged`); once a report arrives it replaces document focus, and `VSCodeApp` marks the selected session viewed whenever a report says the webview is seen again.
 
 ## Session message loading
 
@@ -326,6 +350,8 @@ The profiler also emits a user-timing mark when pending global-session recency i
 Streaming assistant and reasoning text is throttled once before reaching the markdown renderer. The renderer incrementally reconciles changed markdown blocks but does not add a second character-pacing timer, which would multiply parse/morph work while catching up on large streamed chunks.
 
 The event pipeline delivers each ordered per-directory flush as one reducer batch. Events retain their individual notifications, cleanup, routing, materialization, and debug side effects, while directory mutations accumulate in order and publish one store transaction per touched directory. Global session mutations and live status, ordering, and timing transitions also accumulate in event order and each owner publishes at most once for the flush. Each top-level state slice is cloned lazily at most once in that batch; no-op events do not change references.
+
+A sustained stream is flushed at most every 100ms (`FLUSH_FRAME_MS`); the first event after a quiet spell is flushed at once, so a lone permission or status event is never held back. The interval matches the 100ms at which streamed text is shown: each flush publishes the directory store and re-renders the streaming message, so a shorter interval pays for renders that change nothing on screen. Measure with `bun run profile:session` against the fixture provider before changing it.
 
 Streaming lifecycle derivation has two paths. Directory attach, switch, bootstrap, and reconnect may perform a full reconciliation. Normal store publications reconcile only sessions whose `session_status` or `message` bucket changed; part-only events update the affected streaming message heartbeat directly and must not rescan all busy sessions.
 
@@ -643,6 +669,16 @@ while the reader sits on the end of a session that is not producing output,
 content growth re-pins with one instant write; output growth belongs to the
 follow logic, which glides only while the session is working.
 
+`useChatTimelineScroll` retires an outgoing scroll container through
+`components/chat/lib/scroll/retireScrollContent.ts`. Chromium can retain a
+queued scroll event's target while animation frames are suspended, keeping its
+detached conversation tree alive. After React's commit and Markdown DOM-cache
+capture, a microtask clears the retired container's remaining children. The
+cleanup requires both a disconnected node and released ownership, so ref
+reattachment, Strict Mode and connected hidden views keep their contents.
+Nodes already transferred to the Markdown cache remain intact. This shared
+cleanup runs independently of animation frames across all chat runtimes.
+
 `bun run profile:switch` measures both moments; see `scripts/perf/DOCUMENTATION.md`.
 
 Select leaf values, not containers:
@@ -671,7 +707,7 @@ The optimization multiplies with targeted event cloning: fewer new references pe
 |-------|------|-----------------|
 | `session-ui-store.ts` | Session selection, draft lifecycle, abort, worktree, SDK actions | Session switch, draft open/close |
 | `voice-store.ts` | Voice connection/activity state | Voice toggle |
-| `input-store.ts` | Pending input text, synthetic parts, attached files | User typing, file attach, revert/fork |
+| `input-store.ts` | Pending input text, synthetic parts, attached files, pending guest attach | User typing, file attach, revert/fork, guest chip |
 | `selection-store.ts` | Per-session model/agent/variant choices | Model/agent picker |
 | `viewport-store.ts` | Scroll anchors, session memory state, sync status | Streaming, scroll, session switch |
 

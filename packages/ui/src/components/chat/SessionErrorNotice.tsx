@@ -4,6 +4,7 @@ import { useI18n } from '@/lib/i18n';
 import { getLastConversationMessage, type Message, type Part, type Session } from '@/lib/opencode/model';
 import { useLatestSessionError } from '@/sync/notification-store';
 import { useDirectoryStore, useSessionStatus } from '@/sync/sync-context';
+import { readLastMessageState, type LastMessageState } from './sessionErrorNoticeState';
 
 interface SessionErrorNoticeProps {
   sessionId: string;
@@ -13,12 +14,6 @@ interface SessionErrorNoticeProps {
 // How long a user message may sit unanswered on an idle session before the
 // notice calls it a reply that never began.
 const UNANSWERED_AFTER_MS = 5_000;
-
-type LastMessageState = {
-  role: 'user' | 'assistant';
-  timestamp: number;
-  hasError: boolean;
-} | null;
 
 /**
  * What the stored history says about a session that stopped without a reply.
@@ -95,16 +90,11 @@ const useLastMessageState = (sessionId: string, directory?: string): LastMessage
   const cacheRef = React.useRef<LastMessageState>(null);
   const getSnapshot = React.useCallback((): LastMessageState => {
     if (!sessionId) return null;
-    const last = getLastConversationMessage(store.getState().message[sessionId]);
-    if (!last) {
+    const next = readLastMessageState(getLastConversationMessage(store.getState().message[sessionId]));
+    if (!next) {
       cacheRef.current = null;
       return null;
     }
-    const next: LastMessageState = {
-      role: last.role,
-      timestamp: (last.role === 'assistant' ? last.time.completed : undefined) ?? last.time.created,
-      hasError: last.role === 'assistant' && Boolean(last.error),
-    };
     const cached = cacheRef.current;
     if (cached && cached.role === next.role && cached.timestamp === next.timestamp && cached.hasError === next.hasError) {
       return cached;
@@ -146,7 +136,8 @@ export const SessionErrorNotice: React.FC<SessionErrorNoticeProps> = ({ sessionI
   // A user message that the session is idle on, with nothing after it for a
   // while, is a reply that never began: the send was accepted but OpenCode
   // produced neither a message nor an error for it.
-  const unansweredSince = !reportedError && !storedFailureApplies && isIdle && lastMessage?.role === 'user'
+  const unansweredSince = !reportedError && !storedFailureApplies && isIdle
+    && lastMessage?.role === 'user' && lastMessage.timestamp > 0
     ? lastMessage.timestamp
     : null;
   const [now, setNow] = React.useState(() => Date.now());

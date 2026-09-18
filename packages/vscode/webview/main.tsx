@@ -20,6 +20,7 @@ import { processVSCodePermissionAutoAccept } from '@openchamber/ui/sync/vscode-p
 import type { AssistantMessage, Part } from '@openchamber/ui/lib/opencode/model';
 import { syncEventSessionID, type SyncEvent } from '@openchamber/ui/lib/opencode/events';
 import { focusChatInput } from '@openchamber/ui/components/chat/composer/editor/dom';
+import { hostViewerStateSchema, reportHostViewerState } from '@openchamber/ui/lib/surfaceAttention';
 
 type ConnectionStatus = 'connecting' | 'connected' | 'error' | 'disconnected';
 type PanelType = 'chat' | 'agentManager';
@@ -414,6 +415,10 @@ const handleLocalApiRequest = async (input: RequestInfo | URL, url: URL, init: R
 
   if (normalizedPathname === '/api/preview/targets') {
     return unsupportedWebRouteResponse('Preview proxy');
+  }
+
+  if (normalizedPathname === '/api/config/themes' || normalizedPathname.startsWith('/api/config/themes/')) {
+    return unsupportedWebRouteResponse('Theme import and management');
   }
 
   if (normalizedPathname.startsWith('/api/openchamber/tunnel/')) {
@@ -1772,10 +1777,12 @@ onCommand('showNotification', (payload) => {
   showOpenChamberNotification(payload as { title?: unknown; body?: unknown; sessionId?: unknown; requireHidden?: unknown } | undefined);
 });
 
-onCommand('windowFocusChanged', (payload) => {
-  if (typeof payload === 'object' && payload && typeof (payload as { focused?: unknown }).focused === 'boolean') {
-    window.__OPENCHAMBER_VSCODE_WINDOW_FOCUSED__ = (payload as { focused: boolean }).focused;
-  }
+onCommand('viewerStateChanged', (payload) => {
+  const parsed = hostViewerStateSchema.safeParse(payload);
+  if (!parsed.success) return;
+  window.__OPENCHAMBER_VSCODE_WINDOW_FOCUSED__ = parsed.data.windowFocused;
+  // The webview document's own focus is not whether the user sees the chat.
+  reportHostViewerState(parsed.data);
 });
 
 const readyNotificationCooldowns = new Map<string, number>();

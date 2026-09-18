@@ -252,6 +252,14 @@ const getToolDisplayName = (part: ToolPart): string => {
     return typeof candidate.name === 'string' ? candidate.name : 'tool';
 };
 
+/** True when a user prompt follows `index`, i.e. a turn is queued or starting. */
+const hasNewerPrompt = (messages: Message[], index: number): boolean => {
+    for (let cursor = messages.length - 1; cursor > index; cursor -= 1) {
+        if (messages[cursor]?.role === 'user') return true;
+    }
+    return false;
+};
+
 export const getActiveAssistantContext = (messages: Message[]): ActiveAssistantContext => {
     // OpenCode v2 records the provider and model on the assistant message
     // itself, so the active model no longer has to be looked up on the user
@@ -259,6 +267,16 @@ export const getActiveAssistantContext = (messages: Message[]): ActiveAssistantC
     for (let index = messages.length - 1; index >= 0; index -= 1) {
         const message = messages[index];
         if (message?.role !== 'assistant') continue;
+
+        // A prompt newer than this answer starts a turn whose model nothing has
+        // recorded yet: a v2 user message carries no model, and the composer may
+        // have switched models or be routing through Auto. Reporting the previous
+        // turn's model would name the wrong one, so nothing is shown until the new
+        // turn's assistant record lands (it is created as the turn starts). A turn
+        // still running keeps its model: the newer prompt is only queued behind it.
+        if (message.time.completed !== undefined && hasNewerPrompt(messages, index)) {
+            return { assistantId: message.id, model: null };
+        }
 
         const providerId = message.providerID.trim();
         const modelId = message.modelID.trim();

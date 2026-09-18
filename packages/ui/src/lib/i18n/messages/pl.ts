@@ -2,6 +2,8 @@ import type { I18nKey } from './en';
 import { settingsDict } from './pl.settings';
 import { linearIssuePickerI18n } from './linear-issue-picker.i18n';
 import { linearPanelI18n } from './linear-panel.i18n';
+import { routingI18n } from './routing.i18n';
+import { pluginPanelI18n } from './plugin-panel.i18n';
 
 export const dict: Record<I18nKey, string> = {
   'sessions.aiRename.action': 'Zmień nazwę z AI',
@@ -33,6 +35,8 @@ export const dict: Record<I18nKey, string> = {
   ...settingsDict,
   ...linearIssuePickerI18n.pl,
   ...linearPanelI18n.pl,
+  ...routingI18n.pl,
+  ...pluginPanelI18n.pl,
   'terminalView.actions.attachSelection': 'Dołącz zaznaczone dane wyjściowe',
   'terminalView.actions.copySelection': 'Kopiuj zaznaczone dane wyjściowe',
   'terminalView.toast.selectionCopied': 'Skopiowano dane wyjściowe',
@@ -1494,6 +1498,7 @@ export const dict: Record<I18nKey, string> = {
   'chat.toolPart.error': 'Błąd:',
   'chat.toolPart.lspErrors': 'Błędy LSP',
   'chat.toolPart.moreErrors': '+{count} kolejnych błędów',
+  'chat.toolPart.moreRows': '+{count} kolejnych wierszy',
   'chat.toolPart.noOutputProduced': 'Brak wygenerowanego wyniku',
   'chat.toolPart.questionsAsked': 'Zadane pytania: {count}',
   'chat.toolPart.filesCount': 'Pliki: {count}',
@@ -1631,6 +1636,7 @@ export const dict: Record<I18nKey, string> = {
   'contextRail.surface.chat.description': 'Sesja otwarta obok',
   'contextRail.surface.notes': 'Wiedza o projekcie',
   'contextRail.editorTree.toggle': 'Przełącz drzewo plików',
+  'contextRail.editor.toggle': 'Przełącz edytor plików',
   'contextPanel.browser.open': 'Otwórz panel przeglądarki',
   'contextPanel.browser.addressAria': 'Adres przeglądarki',
   'contextPanel.browser.history.label': 'Ostatnie adresy',
@@ -1774,6 +1780,7 @@ export const dict: Record<I18nKey, string> = {
   'contextUsage.tooltip.contextLimit': 'Limit kontekstu: {tokens}',
   'contextUsage.tooltip.outputLimit': 'Limit wyjścia: {tokens}',
   'contextUsage.tooltip.cost': 'Koszt: {cost}',
+  'contextUsage.compacted.description': 'Kontekst skompaktowany. Użycie zaktualizuje się po następnej odpowiedzi.',
   'contextUsage.tooltip.usedTokens': 'Zużyte tokeny: {tokens}',
   'desktopHostSwitcher.actions.add': 'Dodaj',
   'desktopHostSwitcher.actions.addInstance': 'Dodaj instancję',
@@ -1911,6 +1918,21 @@ export const dict: Record<I18nKey, string> = {
   'diffView.state.cleanWorkingTree': 'Drzewo robocze jest czyste, brak zmian do wyświetlenia',
   'diffView.state.noLastTurnChanges': 'Brak zmian z ostatniej tury do wyświetlenia',
   'diffView.state.failedToLoadDiff': 'Nie udało się wczytać diffu',
+  'diffView.unavailable.missingTitle': 'Plik już nie istnieje',
+  'diffView.unavailable.missingDescription': 'Został usunięty po wczytaniu listy zmian. Lista jest odświeżana.',
+  'diffView.unavailable.nestedRepositoryTitle': 'Osobne repozytorium Git',
+  'diffView.unavailable.nestedRepositoryDescription': 'Ten folder ma własną historię Git. Otwórz go jako projekt, aby zobaczyć jego zmiany.',
+  'diffView.unavailable.untrackedDirectoryTitle': 'Folder z nowymi plikami',
+  'diffView.unavailable.untrackedDirectoryDescription': 'Ten folder zawiera zbyt wiele nowych plików, aby wyświetlić je pojedynczo. Dodaj go do indeksu (stage) albo wpisz do .gitignore, jeśli nie należy do repozytorium.',
+  'diffView.submodule.title': 'Submoduł',
+  'diffView.submodule.commitChanged': 'Commit {from} → {to}',
+  'diffView.submodule.commitUnchanged': 'Nadal na commicie {commit}',
+  'diffView.submodule.added': 'Nowy submoduł na commicie {commit}',
+  'diffView.submodule.removed': 'Submoduł usunięty, był na commicie {commit}',
+  'diffView.submodule.notCheckedOut': 'Niepobrany. Zapisany commit: {commit}',
+  'diffView.submodule.trackedChanges': 'Ma niezatwierdzone zmiany',
+  'diffView.submodule.untrackedFiles': 'Ma nieśledzone pliki',
+  'diffView.submodule.conflict': 'Konflikt scalania dotyczący zapisanego commita',
   'diffView.state.largeDiff': 'Duży diff ({count} zmienionych linii)',
   'diffView.state.largeDiffDescription': 'Renderowanie może być wolne. Nadal możesz wyświetlić diff przyciskiem poniżej.',
   'diffView.state.loadingChanges': 'Ładowanie zmian...',

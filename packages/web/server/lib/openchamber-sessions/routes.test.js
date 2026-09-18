@@ -106,6 +106,7 @@ vi.mock('@opencode/client', () => ({
 vi.mock('../git/index.js', () => ({
   createWorktree: (...args) => globalThis.__openchamberCreateWorktreeMock(...args),
   getWorktreeBootstrapStatus: (...args) => globalThis.__openchamberGetWorktreeBootstrapStatusMock(...args),
+  resolvePrimaryWorktreeRoot: async (directory) => ({ root: directory === '/repo/worktrees/side-task' ? '/repo/app' : directory }),
 }));
 
 /**
@@ -530,6 +531,32 @@ describe('openchamber session routes', () => {
       model: { id: 'gpt-5.5', providerID: 'openai' },
     });
     expect(sessionSwitchAgentMock).toHaveBeenCalledWith({ sessionID: 'ses_123', agent: 'build' });
+  });
+
+  it.each([
+    ['', { projectId: 'proj_1' }],
+    ['', { directory: '/repo/app', worktree: { name: 'side-task' } }],
+    ['', { directory: '/repo/worktrees/side-task' }],
+    ['/ses_existing/send', { directory: '/repo/worktrees/side-task' }],
+    ['/ses_existing/fork', { directory: '/repo/worktrees/side-task' }],
+  ])('prefers project defaults for %s with %j', async (endpoint, scope) => {
+    useCatalog();
+    const { app } = createApp({
+      readSettingsFromDiskMigrated: async () => ({
+        defaultModel: 'openai/gpt-5.5',
+        defaultAgent: 'build',
+        projects: [{ id: 'proj_1', path: '/repo/app', defaultAgent: 'plan' }],
+      }),
+    });
+
+    const response = await request(app)
+      .post(`/api/openchamber/sessions${endpoint}`)
+      .send({ ...scope, prompt: 'Run this' })
+      .expect(200);
+
+    expect(response.body.agent).toBe('plan');
+    // v2 puts the agent on the session, not in the prompt body.
+    expect(sessionSwitchAgentMock).toHaveBeenCalledWith(expect.objectContaining({ agent: 'plan' }));
   });
 
   it('dispatches an initial prompt when model is provided', async () => {

@@ -15,6 +15,7 @@ import type {
 } from "@/lib/opencode/model"
 import { createEventPipeline } from "./event-pipeline"
 import { isVSCodeRuntime } from "@/lib/desktop"
+import { isSurfaceAttended } from "@/lib/surfaceAttention"
 import { isMobileSurfaceRuntime } from "@/lib/runtimeSurface"
 import { reduceGlobalEvent, applyDirectoryEvent, type SessionMaterializationReason } from "./event-reducer"
 import { useGlobalSyncStore } from "./global-sync-store"
@@ -58,6 +59,7 @@ import { getReconnectCandidateSessionIds, mergeBootstrapSessions } from "./recon
 import { messagesBefore } from "./message-ordering"
 import { opencodeClient } from "@/lib/opencode/client"
 import { usePermissionStore } from "@/stores/permissionStore"
+import { useRoutingStore } from "@/stores/useRoutingStore"
 import { useMessageQueueStore } from "@/stores/messageQueueStore"
 import { subscribeMessageQueueSync } from "./message-queue-sync"
 import {
@@ -585,20 +587,16 @@ export function setExternallyViewedSession(directory: string, sessionId: string,
   externallyViewedSessions.set(key, Date.now() + EXTERNAL_VIEW_TTL_MS)
 }
 
-// The window must actually be focused for the active session to count as
-// "seen": if the app is minimized or in the background, a turn finishing in the
-// currently-selected session should still raise an unseen marker (in the tray
-// and in-app), since the user isn't looking at it.
-function isWindowFocused(): boolean {
-  return typeof document !== "undefined" && document.hasFocus()
-}
-
 function isViewedInCurrentSession(directory: string, sessionId?: string): boolean {
   if (!sessionId) return false
   if (
     _activeDirectory && _activeSession
     && directory === _activeDirectory && sessionId === _activeSession
-    && isWindowFocused()
+    // The user must actually see the surface for the active session to count
+    // as "seen": if the app is minimized, in the background, or (in VS Code)
+    // the chat view is hidden, a turn finishing in the selected session still
+    // raises an unseen marker.
+    && isSurfaceAttended()
   ) return true
   pruneExternallyViewedSessions()
   return externallyViewedSessions.has(viewedSessionKey(directory, sessionId))
@@ -1647,6 +1645,8 @@ export function handleEvent(
 
   if (payload.type === "permission.replied") {
     const { sessionID, requestID } = payload.properties
+    // A request the routing safety net was holding is settled either way.
+    if (requestID) useRoutingStore.getState().releasePermission(requestID)
     const toastKey = getPermissionToastKey(sessionID, requestID)
     const eventKey = getVSCodePermissionEventKey(expectedRuntimeKey, resolvedDirectory, sessionID, requestID)
     if (eventKey) pendingVSCodePermissionEvents.delete(eventKey)

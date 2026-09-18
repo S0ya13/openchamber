@@ -19,8 +19,7 @@ type FolderCallbacks = {
 type RowPropsCapture = Pick<SessionGroupSectionProps,
   | 'allowReselect'
   | 'onSessionSelected'
-  | 'isSessionSearchOpen'
-  | 'sessionSearchQuery'
+  | 'resetSessionSearch'
   | 'deleteSessionConfirm'
 >;
 
@@ -118,18 +117,17 @@ const createProps = (): SessionGroupSectionProps => ({
   notifyOnSubtasks: false,
   expandedParents: new Set(),
   editingId: null,
+  editingRowKey: null,
   editTitle: '',
   openSidebarMenuKey: null,
   setEditingId: () => undefined,
+  setEditingRowKey: () => undefined,
   setEditTitle: () => undefined,
   toggleParent: () => undefined,
   setOpenSidebarMenuKey: () => undefined,
   startFolderRename: () => undefined,
   allowReselect: false,
-  isSessionSearchOpen: false,
-  sessionSearchQuery: '',
-  setSessionSearchQuery: () => undefined,
-  setIsSessionSearchOpen: () => undefined,
+  resetSessionSearch: () => undefined,
   deleteSessionConfirm: null,
   setDeleteSessionConfirm: () => undefined,
   startSessionWorktreeMenuLoad: () => ({
@@ -193,26 +191,27 @@ describe('SessionGroupSection public behavior', () => {
     }
   });
 
-  test('propagates confirmation, search/navigation, and copy ownership changes to rendered rows', async () => {
+  test('propagates confirmation and search/navigation ownership changes to rendered rows', async () => {
     const dom = installHookTestDom();
     const root = createRoot(dom.container);
     const firstSelected = () => undefined;
     const nextSelected = () => undefined;
+    const firstResetSearch = () => undefined;
+    const nextResetSearch = () => undefined;
     const initialProps = createProps();
 
     try {
-      await act(async () => root.render(<I18nProvider><SessionGroupSection {...initialProps} group={groupWithSession} onSessionSelected={firstSelected} /></I18nProvider>));
+      await act(async () => root.render(<I18nProvider><SessionGroupSection {...initialProps} group={groupWithSession} onSessionSelected={firstSelected} resetSessionSearch={firstResetSearch} /></I18nProvider>));
       expect(rowPropsCapture?.onSessionSelected).toBe(firstSelected);
-      expect(rowPropsCapture?.sessionSearchQuery).toBe('');
+      expect(rowPropsCapture?.resetSessionSearch).toBe(firstResetSearch);
       expect(rowPropsCapture?.deleteSessionConfirm).toBeNull();
 
       // SAFETY: the confirmation is only forwarded by identity to the row mock.
       const confirmation = { session: { id: 'session-a' } as Session, descendantCount: 0, descendantIds: [], archivedBucket: false };
-      await act(async () => root.render(<I18nProvider><SessionGroupSection {...initialProps} group={groupWithSession} allowReselect onSessionSelected={nextSelected} isSessionSearchOpen sessionSearchQuery="search" deleteSessionConfirm={confirmation} /></I18nProvider>));
+      await act(async () => root.render(<I18nProvider><SessionGroupSection {...initialProps} group={groupWithSession} allowReselect onSessionSelected={nextSelected} resetSessionSearch={nextResetSearch} deleteSessionConfirm={confirmation} /></I18nProvider>));
       expect(rowPropsCapture?.allowReselect).toBe(true);
       expect(rowPropsCapture?.onSessionSelected).toBe(nextSelected);
-      expect(rowPropsCapture?.isSessionSearchOpen).toBe(true);
-      expect(rowPropsCapture?.sessionSearchQuery).toBe('search');
+      expect(rowPropsCapture?.resetSessionSearch).toBe(nextResetSearch);
       expect(rowPropsCapture?.deleteSessionConfirm).toBe(confirmation);
     } finally {
       await act(async () => root.unmount());

@@ -231,6 +231,9 @@ export function createMessageQueueRuntime({
   sessionKnowledgeRuntime = null,
   broadcastGlobalUiEvent,
   onPromptSent,
+  // Resolves the `openchamber/auto` sentinel into a real model and agent right
+  // before the send; absent means the queue never sees the sentinel.
+  resolveAutoSelection = null,
   dataDir,
   fetchImpl = fetch,
   now = Date.now,
@@ -455,16 +458,32 @@ export function createMessageQueueRuntime({
   };
 
   const sendItem = async (sessionId, directory, item) => {
-    const { providerID, modelID, agent, variant } = item.sendConfig;
+    const { providerID, modelID, variant } = item.sendConfig;
+    let agent = item.sendConfig.agent;
+    let model = { id: modelID, providerID, ...(variant ? { variant } : {}) };
     const promptFiles = item.attachments.map(toPromptFile);
     const contextMessages = item.context.flatMap(toContextMessages);
+
+    // Jev routing, when the queued send named the Auto sentinel. A failure
+    // inside resolves to the fallback model; only a missing fallback throws.
+    const routed = await resolveAutoSelection?.({
+      sessionId,
+      directory,
+      model,
+      agent,
+      requestText: item.text,
+    });
+    if (routed) {
+      model = routed.model;
+      agent = routed.agent ?? agent;
+    }
 
     // v2 selects model and agent on the session, not per prompt: the choice is
     // switched once and then persists.
     await openCodeFetch(`/api/session/${encodeURIComponent(sessionId)}/model`, {
       directory,
       method: 'POST',
-      body: { model: { id: modelID, providerID, ...(variant ? { variant } : {}) } },
+      body: { model },
     });
     if (agent) {
       await openCodeFetch(`/api/session/${encodeURIComponent(sessionId)}/agent`, {

@@ -871,8 +871,10 @@ export async function createSession(
   metadata?: Metadata,
   selectionTransition?: "submitted-draft",
   selection?: SessionCreateSelection,
+  navigation: "open" | "preserve" = "open",
 ): Promise<Session | null> {
   const runtimeKey = getRuntimeKey()
+  const runtimeClient = opencodeClient.getSdkClient()
   try {
     // Capture the effective directory used for session creation so we can fall
     // back to it when the server response omits the `directory` field.
@@ -885,7 +887,7 @@ export async function createSession(
       effectiveDirectory,
     )
 
-    if (getRuntimeKey() !== runtimeKey) return null
+    if (getRuntimeKey() !== runtimeKey || opencodeClient.getSdkClient() !== runtimeClient) return null
     const sessionDirectory = session.directory || effectiveDirectory || null
     // Pre-populate routing index so SSE events arriving before session.created
     // can be routed to the correct child store
@@ -902,7 +904,7 @@ export async function createSession(
       }
       getImperativeSessionMessageLoader()?.initializeCreatedSession({ directory: sessionDirectory, sessionID: session.id })
     }
-    useSessionUIStore.getState().setCurrentSession(session.id, sessionDirectory, selectionTransition)
+    if (navigation === "open") useSessionUIStore.getState().setCurrentSession(session.id, sessionDirectory, selectionTransition)
     useSessionUIStore.getState().markSessionAsOpenChamberCreated(session.id)
     useGlobalSessionsStore.getState().upsertSession(session)
     return session
@@ -1743,6 +1745,8 @@ export async function optimisticSend(input: {
     id: messageID,
     role: "user",
     sessionID: input.sessionId,
+    // A user message never completes a turn; only assistant messages carry
+    // `time.completed`, and readers treat its presence as "turn finished".
     time: { created: Date.now() },
   }
 

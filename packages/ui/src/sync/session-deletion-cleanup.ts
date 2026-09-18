@@ -5,6 +5,7 @@ import { createInputHistoryIdentity, useInputHistoryStore } from '@/stores/useIn
 import { useSessionFoldersStore } from '@/stores/useSessionFoldersStore';
 import { useInlineCommentDraftStore } from '@/stores/useInlineCommentDraftStore';
 import { useSessionPinnedStore } from '@/stores/useSessionPinnedStore';
+import { useSessionMultiSelectStore } from '@/stores/useSessionMultiSelectStore';
 
 export const cleanupPersistedSessionState = (identity: {
   runtimeKey: string;
@@ -21,6 +22,7 @@ export const cleanupPersistedSessionState = (identity: {
     else useMessageQueueStore.getState().clearQueue(queueTarget);
   }
   useSessionFoldersStore.getState().removeSessionEverywhere(identity.runtimeKey, identity.sessionId);
+  useSessionMultiSelectStore.getState().removeMany([identity.sessionId]);
   useInlineCommentDraftStore.getState().clearSessionDrafts(identity.runtimeKey, identity.directory, identity.sessionId);
   useSessionPinnedStore.getState().clearPinnedSession(identity.runtimeKey, identity.directory, identity.sessionId);
   const inputHistoryIdentity = createInputHistoryIdentity(identity.runtimeKey, identity.directory, identity.sessionId);
