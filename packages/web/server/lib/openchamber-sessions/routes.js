@@ -251,8 +251,10 @@ const createSession = async ({ client, directory, title }) => {
 const forkSession = async ({ client, sessionID, messageID }) => {
   const session = await client.session.fork({
     sessionID,
-    // Without a branch point the whole session is carried over.
-    boundary: messageID ? { type: 'before', messageID } : { type: 'through' },
+    // OpenCode 2.0.8 replaced the SessionForkBoundary object with an optional
+    // `before` message id. Omitting it carries the whole session over, which is
+    // what the old `{ type: 'through' }` boundary meant.
+    ...(messageID ? { before: messageID } : {}),
   });
   if (!asNonEmptyString(session?.id)) throw new Error('failed to fork session');
   return session;
@@ -573,7 +575,8 @@ export const createOpenChamberSessionService = (dependencies) => {
       try {
         await client.session.command({
           sessionID,
-          command: resolvedCommand.command,
+          // OpenCode 2.0.8 renamed the command body field `command` to `name`.
+          name: resolvedCommand.command,
           text: resolvedCommand.arguments || '',
         });
       } catch (error) {

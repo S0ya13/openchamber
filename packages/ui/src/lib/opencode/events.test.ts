@@ -91,7 +91,7 @@ describe("translateWireEvent", () => {
       ...base,
       type: "session.step.started",
       durable,
-      data: { sessionID: "ses_1", assistantMessageID: "msg_a", agent: "build", model: { id: "m", providerID: "p" } },
+      data: { sessionID: "ses_1", assistantMessageID: "msg_a", agent: "build", model: { id: "m", providerID: "p" }, started: 1000 },
     })
     expect(started).toEqual([
       {
@@ -263,10 +263,47 @@ describe("translateWireEvent", () => {
     }
   })
 
-  test("OpenCode's own catalog.updated is not a refresh signal", () => {
-    // It fires dozens of times while a reply streams and is being removed
-    // upstream; the model list is re-read on credential and config changes.
-    expect(translateWireEvent({ ...base, type: "catalog.updated", data: {} })).toEqual([])
+  test("the provider and model announcements re-read the model list", () => {
+    // 2.0.8 replaced the `catalog.updated` storm with these two, which OpenCode
+    // publishes only when the list they name actually changed.
+    expect(translateWireEvent({ ...base, type: "provider.updated", data: {} })).toEqual([
+      { type: "catalog.updated", properties: { kind: "provider" } },
+    ])
+    expect(translateWireEvent({ ...base, type: "model.updated", data: {} })).toEqual([
+      { type: "catalog.updated", properties: { kind: "model" } },
+    ])
+  })
+
+  test("a location shutdown asks the sync layer to revalidate that directory", () => {
+    expect(translateWireEvent({ ...base, type: "location.shutdown", data: {} })).toEqual([
+      { type: "location.shutdown", properties: {} },
+    ])
+  })
+
+  test("skill activation appears in the transcript live", () => {
+    expect(
+      translateWireEvent({
+        ...base,
+        type: "session.skill.activated",
+        durable,
+        data: { sessionID: "ses_1", id: "skill_1", name: "research", text: "Researching" },
+      }),
+    ).toEqual([
+      {
+        type: "message.updated",
+        properties: {
+          info: {
+            id: "msg_1",
+            sessionID: "ses_1",
+            role: "skill",
+            time: { created: 1000 },
+            skill: "skill_1",
+            name: "research",
+            text: "Researching",
+          },
+        },
+      },
+    ])
   })
 
   test("mcp status changes stay their own event", () => {
@@ -278,6 +315,9 @@ describe("translateWireEvent", () => {
     const ignored: OpenCodeEvent[] = [
       { ...base, type: "session.inbox.delivery.changed", durable, data: { sessionID: "ses_1", inboxID: "in_1", delivery: "queue" } },
       { ...base, type: "tui.toast.show", data: { message: "x", variant: "info" } },
+      { ...base, type: "integration.updated", data: {} },
+      { ...base, type: "filesystem.changed", data: { file: "/repo/a.ts", event: "change" } },
+      { ...base, type: "worktree.updated", data: { projectID: "proj" } },
     ]
     for (const event of ignored) expect(translateWireEvent(event)).toEqual([])
   })

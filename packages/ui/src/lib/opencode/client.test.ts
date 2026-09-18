@@ -321,7 +321,7 @@ describe("read timeouts (#2470)", () => {
     const client = createRuntimeOpencodeClient({ baseUrl: "http://runtime.test/api", requestTimeoutMs: 20 })
     responses.push(HANG)
     // The raw client reports transport failures as ClientError("Transport") with the cause attached.
-    const failure = await client.health.get().catch((error: Error) => error)
+    const failure = await client.server.info().catch((error: Error) => error)
     expect(failure).toMatchObject({ reason: "Transport", cause: { message: "OpenCode request timed out after 20ms" } })
 
     let settled = false

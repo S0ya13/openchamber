@@ -1630,7 +1630,7 @@ export async function updateSessionTitle(
   else cancelSessionTitleGeneration(sessionId)
   const sessionDirectory = options?.directory ?? getSessionDirectory(sessionId)
   await opencodeClient.renameSession(sessionId, title, sessionDirectory)
-  // `session.rename` answers with nothing, so the record published to the
+  // `session.update` answers with nothing, so the record published to the
   // stores is re-read rather than assembled from the local copy plus a hope.
   const session = await opencodeClient.getSession(sessionId, sessionDirectory)
   if (isStaleRuntime(options?.expectedRuntimeKey)) throw new Error("runtime changed")
@@ -2321,7 +2321,7 @@ export async function forkFromMessage(sessionId: string, messageId: string): Pro
     .trim()
   const fileParts = parts.filter((part): part is FilePart => part.type === "file")
 
-  const forkedSession = await opencodeClient.forkSession(sessionId, { type: "before", messageID: messageId }, directory)
+  const forkedSession = await opencodeClient.forkSession(sessionId, { before: messageId, directory })
   if (isStaleRuntime(expectedRuntimeKey)) return
   const target = createChatDraftIdentity(expectedRuntimeKey, resolveSessionOwnedDirectory(forkedSession) ?? directory, forkedSession.id)
   if (!target) throw new Error("Forked session has no composer directory")

@@ -62,7 +62,7 @@ export type Project = {
   name?: string
   icon?: { url?: string; override?: string; color?: string }
   commands?: { start?: string }
-  time: { created: number; updated: number; initialized?: number }
+  time: { created: number; updated: number }
   sandboxes: string[]
 }
 /** A discovered configuration source; only `document` entries carry settings. */
@@ -99,7 +99,6 @@ export type Session = {
   projectID: string
   /** Absolute directory the session runs in (`location.directory` on the wire). */
   directory: string
-  workspaceID?: string
   /** Optional subdirectory inside `directory` the session is scoped to. */
   subpath?: string
   title: string

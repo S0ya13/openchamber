@@ -266,7 +266,7 @@ export const createScheduledTasksRuntime = (deps) => {
 
   // Every OpenCode route lives under /api in v2 and the client appends it, so
   // the client only wants the origin. Directory scoping is a request header.
-  const openCodeOrigin = () => new URL(buildOpenCodeUrl('/api/health', '')).origin;
+  const openCodeOrigin = () => new URL(buildOpenCodeUrl('/api/info', '')).origin;
   const createScopedClient = (directory) => OpenCode.make({
     baseUrl: openCodeOrigin(),
     headers: {
@@ -533,7 +533,8 @@ export const createScheduledTasksRuntime = (deps) => {
     // set when the run created the session; the command body only carries text.
     await client.session.command({
       sessionID,
-      command: command.command,
+      // OpenCode 2.0.8 renamed the command body field `command` to `name`.
+      name: command.command,
       text: command.arguments,
     });
   };

@@ -115,7 +115,8 @@ persisted "sending" flag would strand a message forever.
    runtime beforehand. Then:
    - text starting with `/` that names a command in OpenCode's `/command`
      list (skills included) and carries no captured context goes to
-     `POST /session/:id/command` with its arguments and file attachments. That
+     `POST /session/:id/command` (body field `name` since OpenCode 2.0.8)
+     with its arguments and file attachments. That
      route takes files only, so a command queued **with** context takes the
      prompt route instead, the same rule the composer applies;
    - otherwise the captured context goes ahead as synthetic messages

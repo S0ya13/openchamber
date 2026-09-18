@@ -1450,9 +1450,9 @@ async function reloadCatalog(kind: CatalogKind, childStores: ChildStoreManager):
           store.setState({ config })
           emitSyncConfigChanged(directory, config)
         }
-        // OpenCode announces no model-list change of its own, so the
-        // provider slice follows the two things that change it: a credential
-        // and the config (which can declare providers).
+        // The provider slice follows everything that can change it:
+        // `provider.updated` / `model.updated` (2.0.8's own announcements), a
+        // credential change, and the config (which can declare providers).
         const provider = await opencodeClient.getProvidersForConfig(directory)
         // Same catalog, same object: a re-read that changes nothing must not
         // re-render every provider consumer.
@@ -1512,6 +1512,28 @@ export function handleEvent(
   if (shouldConsumeBulkArchiveEcho(payload, expectedRuntimeKey)) return
 
   const directory = resolveDirectoryFromRoutingIndex(routingIndex, rawDirectory, payload, childStores, batch)
+
+  // OpenCode dropped this directory's in-memory services (an hour idle, or an
+  // explicit reload). Session records and messages live in its database and
+  // stay valid; what went away is the live state read from that graph, so the
+  // directory the user is looking at is bootstrapped again from scratch. The
+  // pending permissions and forms it rejected on the way out, and the turns it
+  // interrupted, arrive as their own events. Background directories are left
+  // alone on purpose: re-reading them would recreate the services OpenCode
+  // just evicted and turn every idle directory into an hourly refresh loop;
+  // they are re-read when selected or on the next reconnect.
+  if (payload.type === "location.shutdown") {
+    if (
+      directory
+      && directory !== "global"
+      && expectedRuntimeKey === getRuntimeKey()
+      && directory === opencodeClient.getDirectory()
+      && childStores.getChild(directory)
+    ) {
+      childStores.requestBootstrap({ directory, priority: "selected", reason: "location-shutdown", force: true })
+    }
+    return
+  }
 
   if (payload.type === "session.deleted" && expectedRuntimeKey === getRuntimeKey()) {
     const sessionID = syncEventSessionID(payload)

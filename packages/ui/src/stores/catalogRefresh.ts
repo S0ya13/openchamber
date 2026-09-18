@@ -64,10 +64,12 @@ const refreshProviders = async (): Promise<void> => {
 
 /**
  * How long after a credential change the model list is read a second time.
- * OpenCode announces nothing when a provider plugin finishes loading its
- * models after a login (Copilot, LM Studio and the like fetch them from the
- * provider), so the first read right after `credential.updated` can land
- * before those models exist.
+ *
+ * 2.0.8's `model.updated` only fires when OpenCode's own provider snapshot
+ * changes, which it recomputes from integration and credential events. A
+ * provider plugin that fetches its models from the provider after a login
+ * (Copilot, LM Studio) lands later and announces nothing, so the first read
+ * right after `credential.updated` can still land before those models exist.
  */
 const PROVIDER_REREAD_AFTER_CREDENTIAL_MS = 5000;
 
@@ -88,7 +90,12 @@ export function catalogRefreshTasks(kind: CatalogKind): Array<() => Promise<void
       return [refreshSkills];
     case "plugin":
       return [refreshPlugins];
+    // `provider.updated` and `model.updated` (2.0.8) are OpenCode's own
+    // deduplicated announcements that the provider list, or the model list it
+    // materialises, changed. Both are answered by re-reading the provider list,
+    // which is where the composer's models come from.
     case "provider":
+    case "model":
       return [refreshProviders];
     case "credential":
       return [refreshProvidersAfterCredentialChange];

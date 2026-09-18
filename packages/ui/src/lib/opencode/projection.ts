@@ -53,7 +53,6 @@ export function projectSession(info: SessionInfo): Session {
     parentID: info.parentID,
     projectID: info.projectID,
     directory: info.location.directory,
-    workspaceID: info.location.workspaceID,
     subpath: info.subpath,
     title: info.title ?? "",
     agent: info.agent,

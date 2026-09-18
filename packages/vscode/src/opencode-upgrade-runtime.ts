@@ -82,7 +82,8 @@ export const getOpenCodeUpgradeStatus = async (manager?: OpenCodeUpgradeManager)
   if (!apiUrl || !manager) return { available: false, currentVersion: null, latestVersion: null, upgrade };
   try {
     const [healthResponse, latestVersion] = await Promise.all([
-      fetch(new URL('/api/health', apiUrl).toString(), { method: 'GET', headers: { Accept: 'application/json', ...manager.getOpenCodeAuthHeaders() } }),
+      // OpenCode 2.0.8 replaced `/api/health` with `/api/info`.
+      fetch(new URL('/api/info', apiUrl).toString(), { method: 'GET', headers: { Accept: 'application/json', ...manager.getOpenCodeAuthHeaders() } }),
       fetchLatestVersion(),
     ]);
     const health = await healthResponse.json().catch(() => null) as { version?: unknown; error?: unknown } | null;

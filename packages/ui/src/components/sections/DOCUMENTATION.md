@@ -63,7 +63,7 @@ writes when the dialog closes, while a new file is only created on confirm.
 `providers/` is not an autosave page. Connecting a provider is an action, not a
 setting: an API key is submitted, an OAuth flow is completed, a credential is
 removed. OpenCode owns the credential store and announces every change
-(`credential.*`, `catalog.updated`), and it watches the config file a custom
+(`credential.*`, `provider.updated`, `model.updated`), and it watches the config file a custom
 provider is written to, so the page never asks for a reload or a restart: it
 refetches its own provider sources and integrations and lets the catalog
 events refresh the stores. (The old "nudge" went through `/api/config/reload`,

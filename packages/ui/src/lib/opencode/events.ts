@@ -89,6 +89,7 @@ export type CatalogKind =
   | "skill"
   | "plugin"
   | "provider"
+  | "model"
   | "credential"
   | "project"
 
@@ -115,6 +116,11 @@ export type SyncEvent =
   | { type: "vcs.branch.updated"; properties: { branch?: string } }
   | { type: "mcp.status.changed"; properties: { server: string } }
   | { type: "catalog.updated"; properties: { kind: CatalogKind } }
+  /**
+   * OpenCode dropped the cached services for this directory (idle eviction or
+   * an explicit reload). Everything read from it is now suspect.
+   */
+  | { type: "location.shutdown"; properties: Record<never, never> }
   // OpenChamber's own server frames that ride the same stream.
   | { type: "openchamber.notification"; properties: OpenchamberNotification }
   | { type: "openchamber.permission-auto-accept"; properties: { sessions: Record<string, boolean>; revision?: number } }
@@ -200,7 +206,6 @@ export function translateWireEvent(event: OpenCodeEvent): SyncEvent[] {
         parentID: event.data.parentID,
         projectID: event.data.projectID,
         directory: event.data.location.directory,
-        workspaceID: event.data.location.workspaceID,
         subpath: event.data.subpath,
         title: event.data.title ?? "",
         agent: event.data.agent,
@@ -274,7 +279,7 @@ export function translateWireEvent(event: OpenCodeEvent): SyncEvent[] {
       ]
     case "session.usage.updated":
       return [sessionEvent(event.data.sessionID, { cost: event.data.cost, tokens: event.data.tokens, time: { updated: event.created } })]
-    case "session.permissions.updated":
+    case "session.permissions":
       return [sessionEvent(event.data.sessionID, { permissions: event.data.permissions })]
     case "session.viewed":
       return [sessionEvent(event.data.sessionID, { time: { viewed: event.created } })]
@@ -374,6 +379,23 @@ export function translateWireEvent(event: OpenCodeEvent): SyncEvent[] {
               text: event.data.text,
               description: event.data.description,
             }),
+          },
+        },
+      ]
+    case "session.skill.activated":
+      return [
+        {
+          type: "message.updated",
+          properties: {
+            info: {
+              id: messageIdFromEvent(event.id),
+              sessionID: event.data.sessionID,
+              role: "skill",
+              time: { created: event.created },
+              skill: event.data.id,
+              name: event.data.name,
+              text: event.data.text,
+            },
           },
         },
       ]
@@ -716,6 +738,8 @@ export function translateWireEvent(event: OpenCodeEvent): SyncEvent[] {
       return [{ type: "vcs.branch.updated", properties: compact({ branch: event.data.branch }) }]
     case "mcp.status.changed":
       return [{ type: "mcp.status.changed", properties: { server: event.data.server } }]
+    case "location.shutdown":
+      return [{ type: "location.shutdown", properties: {} }]
     case "config.updated":
       return [{ type: "catalog.updated", properties: { kind: "config" } }]
     case "agent.updated":
@@ -731,9 +755,76 @@ export function translateWireEvent(event: OpenCodeEvent): SyncEvent[] {
       return [{ type: "catalog.updated", properties: { kind: "credential" } }]
     case "project.updated":
       return [{ type: "catalog.updated", properties: { kind: "project" } }]
+    // 2.0.8 replaced the `catalog.updated` storm with two deduplicated
+    // announcements: the provider list changed, and the model list it
+    // materialises changed. Both re-read the provider/model lists.
+    case "provider.updated":
+      return [{ type: "catalog.updated", properties: { kind: "provider" } }]
+    case "model.updated":
+      return [{ type: "catalog.updated", properties: { kind: "model" } }]
 
-    default:
+    // --- known events the sync layer deliberately does not model -------------
+    //
+    // Every wire event is listed so a new one in a future OpenCode fails the
+    // type-check here instead of being silently dropped.
+
+    // A login or logout changes the integration list; OpenCode republishes
+    // `provider.updated` (and then `model.updated`) for the same change, so
+    // acting here too would only double every read.
+    case "integration.updated":
+    // The compaction summary is rendered from `started`/`ended`; OpenChamber
+    // does not stream it.
+    case "session.compaction.delta":
+    // The fork's own `session.created` carries everything the stores need.
+    case "session.forked":
+    // Queue-vs-steer placement of a pending inbox item is not shown.
+    case "session.inbox.delivery.changed":
+    // The update is applied by the desktop/CLI updater, not by the UI;
+    // `installation.update-available` is the one the UI acts on.
+    case "installation.updated":
+    // Catalogs OpenChamber does not surface as lists of their own.
+    case "models-dev.refreshed":
+    case "reference.updated":
+    case "websearch.updated":
+    // Resources of an MCP server; OpenChamber shows connection status only
+    // (`mcp.status.changed`).
+    case "mcp.resources.changed":
+    // OpenChamber watches the filesystem through its own server routes.
+    case "filesystem.changed":
+    // Worktrees go through OpenChamber's own git API, not OpenCode's.
+    case "worktree.updated":
+    case "worktree.resolved":
+    // Free-standing shells and PTYs are the TUI's and the terminal panel's
+    // own transports; neither reads them from this stream.
+    case "shell.created":
+    case "shell.deleted":
+    case "shell.exited":
+    case "pty.created":
+    case "pty.updated":
+    case "pty.deleted":
+    case "pty.exited":
+    case "persistent-pty.added":
+    case "persistent-pty.removed":
+    // Never framed onto the public stream in 2.0.8, so they cannot reach here
+    // and are not listed above: `session.message.content.updated` (replay-only
+    // for transcripts written by older releases), `session.usage.recorded`
+    // (side-channel spend; the session totals arrive as `session.usage.updated`)
+    // and `log.synced` (durable-log bookkeeping).
+
+    // Addressed to the TUI client.
+    case "tui.command.execute":
+    case "tui.prompt.append":
+    case "tui.session.select":
+    case "tui.toast.show":
       return []
+
+    default: {
+      // Exhaustiveness: only the open-ended `rpc.*` frames (addressed to a
+      // plugin's RPC endpoint, never to us) may reach here.
+      const remaining: `rpc.${string}` = event.type
+      void remaining
+      return []
+    }
   }
 }
 

@@ -435,7 +435,7 @@ describe('message queue runtime', () => {
     expect(openCode.state.sent).toHaveLength(1);
     expect(openCode.state.sent[0].path).toBe(`/api/session/${SESSION}/command`);
     // v2's command route takes `text`, and the selection lives on the session.
-    expect(openCode.state.sent[0].body).toEqual({ command: 'review', text: 'src' });
+    expect(openCode.state.sent[0].body).toEqual({ name: 'review', text: 'src' });
   });
 
   it('delivers captured context as synthetic messages, instructions first, before project knowledge', async () => {
@@ -495,7 +495,7 @@ describe('message queue runtime', () => {
     await settle();
     expect(openCode.state.sent[0].path).toBe(`/api/session/${SESSION}/command`);
     expect(openCode.state.sent[0].body).toEqual({
-      command: 'review',
+      name: 'review',
       text: '',
       files: [{ uri: 'data:text/plain,hi', name: 'f.txt' }],
     });

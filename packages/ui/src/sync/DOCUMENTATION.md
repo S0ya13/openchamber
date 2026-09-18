@@ -81,15 +81,16 @@ client's config cache, otherwise the refresh would be answered from the copy
 cached seconds earlier. A re-read that returns an identical list keeps the
 objects already in the stores, so nothing re-renders.
 
-**The model list has no event of its own.** OpenCode's `catalog.updated`
-fires dozens of times while a reply streams and is being removed upstream, so
-`events.ts` ignores it. The provider/model list is re-read on the two things
-that change it: a credential change (a login or logout) and a config change (a
-provider declared in `opencode.json`). After a credential change the Settings
-and composer stores read it twice, the second time
-`PROVIDER_REREAD_AFTER_CREDENTIAL_MS` later, because provider plugins that
-fetch their models after a login (Copilot, LM Studio) finish after the first
-read.
+**The model list.** OpenCode 2.0.8 removed the `catalog.updated` storm and
+replaced it with `provider.updated` and `model.updated`, which it publishes
+only when the list they name actually changed; `events.ts` translates them into
+the `provider` and `model` catalog kinds. The config change that declares a
+provider in `opencode.json` and a credential change (a login or logout) still
+trigger a re-read as well, because OpenCode recomputes those two snapshots from
+integration and credential events only: a provider plugin that fetches its
+models from the provider after a login (Copilot, LM Studio) lands later and
+announces nothing. That is why the Settings and composer stores read the list a
+second time `PROVIDER_REREAD_AFTER_CREDENTIAL_MS` after a credential change.
 
 | Kind | Sync child stores | Settings/composer stores (`stores/catalogRefresh.ts`) |
 |---|---|---|
@@ -98,8 +99,22 @@ read.
 | `skill` | — | skills store + skills catalog |
 | `plugin` | — | plugins store |
 | `config` | `config` and `provider` per directory (plus `emitSyncConfigChanged`) | agents, commands, skills, MCP config, plugins, config-store providers |
-| `provider` / `credential` | `provider` per directory | config-store providers (model-metadata cache invalidated; the current list stays until the new one lands; `credential` reads twice) |
+| `provider` / `model` / `credential` | `provider` per directory | config-store providers (model-metadata cache invalidated; the current list stays until the new one lands; `credential` reads twice) |
 | `project` | global project list | — |
+
+## A location's services going away
+
+OpenCode caches the service graph that serves a directory and drops it after
+an hour of inactivity, or when something asks it to reload. It announces that
+as `location.shutdown` for the directory. Session records and messages live in
+OpenCode's database and stay valid; the live state read from that graph does
+not, so `handleEvent` bootstraps the *selected* directory again (reason
+`location-shutdown`, forced) instead of patching it. Background directories are
+deliberately left alone: re-reading them would recreate the services OpenCode
+just evicted and turn every idle directory into an hourly refresh loop. They
+are re-read when selected or on the next `server.connected`. The pending
+permissions and forms OpenCode rejected on the way out and the turns it
+interrupted arrive as their own events.
 
 ## Session list rules
 

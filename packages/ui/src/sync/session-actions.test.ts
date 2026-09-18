@@ -108,12 +108,11 @@ mock.module("@/lib/opencode/client", () => ({
     }),
     forkSession: mock(async (
       sessionId: string,
-      boundary: { type: "before"; messageID: string } | { type: "through" },
-      directory?: string | null,
+      options?: { before?: string; directory?: string | null },
     ): Promise<Session> => {
       replyCalls.push({
         method: "session.fork",
-        params: { sessionID: sessionId, messageID: boundary.type === "before" ? boundary.messageID : undefined, directory },
+        params: { sessionID: sessionId, messageID: options?.before, directory: options?.directory },
       })
       beforeSessionForkResolve?.()
       if (sessionForkError) throw sessionForkError
@@ -1141,7 +1140,7 @@ describe("updateSessionTitle live state", () => {
     expect(renameCall?.params.sessionID).toBe("session-a")
     expect(renameCall?.params.title).toBe("New Title")
     expect(renameCall?.params.directory).toBe("/test/project")
-    // `session.rename` answers with nothing, so the published record is the
+    // `session.update` answers with nothing, so the published record is the
     // re-read session rather than a locally patched copy.
     expect((globalUpsertedSessions[0] as Session)?.title).toBe("New Title")
     expect(sessionStore.getState().session[0].title).toBe("New Title")

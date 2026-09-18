@@ -638,26 +638,28 @@ async function waitForReady(
       const abort = () => controller.abort();
       signal?.addEventListener('abort', abort, { once: true });
       try {
-        // OpenCode 2.x readiness check: every route lives under /api.
-        const url = new URL(`${baseUrl}/api/health`);
+        // OpenCode 2.x readiness check: every route lives under /api. 2.0.8
+        // removed `/api/health`; `/api/info` replaces it and a 200 is the whole
+        // readiness answer — the payload has no `healthy` field.
+        const url = new URL(`${baseUrl}/api/info`);
         const res = await fetch(url.toString(), {
           method: 'GET',
           headers: { Accept: 'application/json', ...authHeaders },
           signal: controller.signal,
         });
 
-        let body: { healthy?: boolean, version?: string } | null = null;
+        let body: { version?: string } | null = null;
         try {
-          body = (await res.json()) as { healthy?: boolean, version?: string };
+          body = (await res.json()) as { version?: string };
         } catch {
           body = null;
         }
 
         getManagerOutputChannel().appendLine(
-          `Health check to ${url.toString()} returned ${res.status} with body: ${JSON.stringify(body)}`
+          `Readiness check to ${url.toString()} returned ${res.status} with body: ${JSON.stringify(body)}`
         );
 
-        if (res.ok && body?.healthy === true) {
+        if (res.ok) {
           return { ok: true, baseUrl, elapsedMs: Date.now() - start, attempts, version: body?.version ?? null };
         }
       } catch {

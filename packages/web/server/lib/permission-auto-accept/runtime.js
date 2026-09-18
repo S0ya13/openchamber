@@ -163,7 +163,8 @@ export function createPermissionAutoAcceptRuntime({
     await request(`/api/session/${encodeURIComponent(permission.sessionID)}/permission/${encodeURIComponent(permission.id)}/reply`, {
       directory,
       method: 'POST',
-      body: { reply: 'once' },
+      // OpenCode 2.0.8 renamed the reply body field `reply` to `decision`.
+      body: { decision: 'once' },
     });
     return true;
   };

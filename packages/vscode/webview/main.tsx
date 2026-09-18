@@ -635,7 +635,8 @@ const handleLocalApiRequest = async (input: RequestInfo | URL, url: URL, init: R
   }
 
   // OpenChamber's own health route reflects the extension's connection status.
-  // `/api/health` belongs to OpenCode 2.x and is forwarded to it.
+  // OpenCode 2.x has no health route of its own; its `/api/info` is forwarded
+  // to it like every other `/api/*` call.
   if (pathname === '/health') {
     const connectionStatus = window.__OPENCHAMBER_CONNECTION__?.status;
     const isReady = connectionStatus === 'connected';

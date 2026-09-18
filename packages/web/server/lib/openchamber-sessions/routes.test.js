@@ -760,7 +760,7 @@ describe('openchamber session routes', () => {
       objective: '/issue--to-pr LIN-123',
     }));
     expect(sessionCommandMock).toHaveBeenCalledWith(expect.objectContaining({
-      command: 'issue--to-pr',
+      name: 'issue--to-pr',
       text: 'LIN-123',
     }));
     expect(createSessionGoal.mock.invocationCallOrder[0])
@@ -816,7 +816,7 @@ describe('openchamber session routes', () => {
 
     expect(sessionForkMock).toHaveBeenCalledWith({
       sessionID: 'ses_source',
-      boundary: { type: 'before', messageID: 'msg_branch_point' },
+      before: 'msg_branch_point',
     });
     expect(response.body).toMatchObject({
       action: 'fork',

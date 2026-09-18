@@ -78,7 +78,7 @@ const resolveBridgeGitGenerationModel = async (
 };
 
 /**
- * OpenCode 2.x generates one-off text without a session: `POST /api/generate`
+ * OpenCode 2.x generates one-off text without a session: `POST /api/experimental/generate`
  * answers with the finished text, so the old create-session / prompt / poll /
  * delete dance (and every way it could leave a stray session behind) is gone.
  */

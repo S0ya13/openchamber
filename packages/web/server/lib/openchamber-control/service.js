@@ -186,7 +186,7 @@ export const createOpenChamberControlService = (dependencies) => {
   const getClient = async (directory = '') => {
     if (typeof waitForOpenCodeReady === 'function') await waitForOpenCodeReady(10_000, 250);
     return createClient({
-      baseUrl: new URL(buildOpenCodeUrl('/api/health', '')).origin,
+      baseUrl: new URL(buildOpenCodeUrl('/api/info', '')).origin,
       headers: {
         ...getOpenCodeAuthHeaders(),
         ...(directory ? { 'x-opencode-directory': encodeURIComponent(directory) } : {}),

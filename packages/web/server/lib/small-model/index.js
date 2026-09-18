@@ -72,7 +72,7 @@ export const getModelInputCharBudget = ({ modelInfo, outputReserveTokens }) => {
  * The output budget to actually request: what the caller asked for, capped by
  * what the model admits it can emit.
  *
- * `/api/generate` takes no output budget of its own, so this number only
+ * `/api/experimental/generate` takes no output budget of its own, so this number only
  * shapes the input reserve — but it has to stay the same number on both sides
  * or a caller that asks for a large answer overruns the context.
  */
@@ -206,7 +206,7 @@ const resolveSmallModel = async ({ client, directory, model, preferredProviderID
 const JSON_FENCE = /^```(?:json)?\s*\n?([\s\S]*?)\n?```$/;
 
 /**
- * `/api/generate` has no structured-output mode, so the schema travels in the
+ * `/api/experimental/generate` has no structured-output mode, so the schema travels in the
  * prompt and the reply is parsed here.
  */
 const buildSchemaInstruction = (responseSchema) =>
@@ -293,7 +293,7 @@ export async function generateSmallModelText({ prompt, system, maxOutputTokens, 
     outputReserveTokens: outputTokens,
   });
 
-  // `/api/generate` takes a single prompt, so the system instructions lead it.
+  // `/api/experimental/generate` takes a single prompt, so the system instructions lead it.
   const sections = [];
   if (typeof system === 'string' && system.trim()) sections.push(system.trim());
   sections.push(clamped.prompt);
@@ -408,7 +408,7 @@ const resolveReserveTokens = (outputReserveTokens, limits) => (
 /**
  * Reports which model would be used, without calling it.
  *
- * `structuredOutput` stays `null`: `/api/generate` has no structured-output
+ * `structuredOutput` stays `null`: `/api/experimental/generate` has no structured-output
  * mode for any model, and this module emulates it through the prompt. Callers
  * must read `null` as "try it", which is exactly right here — the verdict
  * comes from the reply, not from a capability flag.

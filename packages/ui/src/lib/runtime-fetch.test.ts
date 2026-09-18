@@ -116,18 +116,18 @@ describe('runtimeFetch transport contract', () => {
 
       await client.session.revert.stage({ sessionID: 'ses_1', messageID: 'msg_1' });
       await client.session.shell({ sessionID: 'ses_1', command: 'ls' });
-      await client.session.rename({ sessionID: 'ses_1', title: 'Renamed' });
-      await client.permission.reply({ sessionID: 'ses_1', requestID: 'perm_1', reply: 'once' });
-      await client.form.reply({ sessionID: 'ses_1', formID: 'form_1', answer: { confirm: true } });
+      await client.session.update({ sessionID: 'ses_1', title: 'Renamed' });
+      await client.permission.reply({ sessionID: 'ses_1', requestID: 'perm_1', decision: 'once' });
+      await client.session.form.reply({ sessionID: 'ses_1', formID: 'form_1', answer: { confirm: true } });
 
       expect(calls.map((call) => call.url)).toEqual([
         'https://app.example/api/session/ses_1/revert/stage',
         'https://app.example/api/session/ses_1/shell',
-        'https://app.example/api/session/ses_1/rename',
+        'https://app.example/api/session/ses_1',
         'https://app.example/api/session/ses_1/permission/perm_1/reply',
         'https://app.example/api/session/ses_1/form/form_1/reply',
       ]);
-      expect(calls.map((call) => call.method)).toEqual(['POST', 'POST', 'POST', 'POST', 'POST']);
+      expect(calls.map((call) => call.method)).toEqual(['POST', 'POST', 'PATCH', 'POST', 'POST']);
       expect(calls.map((call) => call.headers.get('content-type'))).toEqual([
         'application/json',
         'application/json',
@@ -141,7 +141,7 @@ describe('runtimeFetch transport contract', () => {
         { messageID: 'msg_1' },
         { command: 'ls' },
         { title: 'Renamed' },
-        { reply: 'once' },
+        { decision: 'once' },
         { answer: { confirm: true } },
       ]);
     } finally {

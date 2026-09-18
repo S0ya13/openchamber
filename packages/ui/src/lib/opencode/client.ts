@@ -21,7 +21,6 @@ import type {
   LocationGetOutput,
   PermissionEffect,
   PermissionSource,
-  SessionForkBoundary,
   SessionInboxDelivery,
   SessionRevert,
 } from "@opencode/client"
@@ -622,9 +621,14 @@ class OpencodeService {
     return projects.map(projectProject)
   }
 
-  /** Identity of the project a directory belongs to. */
-  async getCurrentProject(directory?: string | null): Promise<{ id: string; directory: string; canonical: string }> {
-    return call("project.current", () => this.clientFor(directory).project.current())
+  /**
+   * Identity of the project a directory belongs to. OpenCode 2.0.8 removed
+   * `project.current`; the Location a directory resolves to carries the same
+   * project record.
+   */
+  async getCurrentProject(directory?: string | null): Promise<LocationGetOutput["project"]> {
+    const location = await call("location.get", () => this.clientFor(directory).location.get())
+    return location.project
   }
 
   async getVcs(directory?: string | null): Promise<Vcs> {
@@ -772,8 +776,12 @@ class OpencodeService {
     return true
   }
 
+  /**
+   * Renames the session. OpenCode 2.0.8 folded `session.rename` into
+   * `session.update`, where an empty title asks the server to regenerate one.
+   */
   async renameSession(id: string, title: string, directory?: string | null): Promise<void> {
-    await call("session.rename", () => this.clientFor(directory).session.rename({ sessionID: id, title }))
+    await call("session.update", () => this.clientFor(directory).session.update({ sessionID: id, title }))
   }
 
   async moveSession(id: string, toDirectory: string, options?: { delivery?: SessionInboxDelivery }): Promise<void> {
@@ -815,7 +823,7 @@ class OpencodeService {
   }
 
   async getSessionMessage(id: string, messageID: string, directory?: string | null): Promise<{ info: Message; parts: Part[] }> {
-    const info = await call("session.message", () => this.clientFor(directory).session.message({ sessionID: id, messageID }))
+    const info = await call("session.message.get", () => this.clientFor(directory).session.message.get({ sessionID: id, messageID }))
     const [projected] = projectMessages([info], id)
     return { info: projected.message, parts: projected.parts }
   }
@@ -1075,7 +1083,7 @@ class OpencodeService {
     await call("session.command", () =>
       this.clientFor(params.directory).session.command({
         sessionID: params.id,
-        command: params.command,
+        name: params.command,
         text: params.arguments ?? "",
         files: files.length > 0 ? files : undefined,
         delivery: params.delivery,
@@ -1129,12 +1137,14 @@ class OpencodeService {
     await call("session.compact", () => this.clientFor(directory).session.compact({ sessionID: sessionId }))
   }
 
-  async forkSession(sessionId: string, boundary: SessionForkBoundary, directory?: string | null): Promise<Session> {
+  /**
+   * Forks the session. `before` copies the transcript up to but excluding that
+   * message; omitting it copies the whole transcript (OpenCode 2.0.8 replaced
+   * the `boundary` object with this single optional message id).
+   */
+  async forkSession(sessionId: string, options?: { before?: string; directory?: string | null }): Promise<Session> {
     const info = await call("session.fork", () =>
-      this.clientFor(directory).session.fork({
-        sessionID: sessionId,
-        boundary: boundary.type === "before" ? { type: "before", messageID: boundary.messageID } : { type: "through" },
-      }),
+      this.clientFor(options?.directory).session.fork({ sessionID: sessionId, before: options?.before }),
     )
     return projectSession(info)
   }
@@ -1233,7 +1243,7 @@ class OpencodeService {
       this.clientFor(options?.directory).permission.reply({
         sessionID,
         requestID,
-        reply,
+        decision: reply,
         message: options?.message,
       }),
     )
@@ -1318,12 +1328,12 @@ class OpencodeService {
   // -------------------------------------------------------------------------
 
   async replyToForm(sessionID: string, formID: string, answer: FormAnswer, directory?: string | null): Promise<boolean> {
-    await call("form.reply", () => this.clientFor(directory).form.reply({ sessionID, formID, answer }))
+    await call("session.form.reply", () => this.clientFor(directory).session.form.reply({ sessionID, formID, answer }))
     return true
   }
 
   async cancelForm(sessionID: string, formID: string, directory?: string | null): Promise<boolean> {
-    await call("form.cancel", () => this.clientFor(directory).form.cancel({ sessionID, formID }))
+    await call("session.form.cancel", () => this.clientFor(directory).session.form.cancel({ sessionID, formID }))
     return true
   }
 
@@ -1332,8 +1342,8 @@ class OpencodeService {
     const directories = this.uniqueDirectories(options?.directories, options?.includeGlobal)
     const lists = await Promise.all(
       directories.map((directory) =>
-        call("form.request.list", () =>
-          (directory ? this.getScopedSdkClient(directory) : this.client).form.request.list().then((r) => r.data),
+        call("form.list", () =>
+          (directory ? this.getScopedSdkClient(directory) : this.client).form.list().then((r) => r.data),
         ),
       ),
     )

@@ -207,6 +207,7 @@ export type DirectoryBootstrapReason =
   | "project-expanded"
   | "worktree-expanded"
   | "server-connected"
+  | "location-shutdown"
   | "action-demand"
 
 export type DirectoryBootstrapDemand = {

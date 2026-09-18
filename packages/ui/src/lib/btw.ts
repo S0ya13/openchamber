@@ -1,5 +1,4 @@
 import type { Message, Part, Session } from '@/lib/opencode/model';
-import type { SessionForkBoundary } from '@opencode/client';
 import { opencodeClient } from '@/lib/opencode/client';
 import * as sessionActions from '@/sync/session-actions';
 import { withBtwSessionLink, withBtwSessionMarker, withoutBtwSessionLink, withoutBtwSessionMarker } from '@/lib/sessionBtwMetadata';
@@ -192,13 +191,12 @@ export async function startBtwSession(input: StartBtwInput): Promise<Session> {
     // so a `/btw` typed mid-turn does not inherit a half-finished one.
     const parentMessages = getSyncMessages(input.parentSessionId, input.directory);
     const forkPointMessageID = findLastCompletedAssistantMessageID(parentMessages);
-    // No completed turn to fork at means take the whole parent transcript
-    // (`through` the trailing message).
-    const lastMessageID = parentMessages[parentMessages.length - 1]?.id ?? '';
-    const boundary: SessionForkBoundary = forkPointMessageID
-      ? { type: 'before', messageID: forkPointMessageID }
-      : { type: 'through', messageID: lastMessageID };
-    const forked = await opencodeClient.forkSession(input.parentSessionId, boundary, input.directory);
+    // No completed turn to fork at means take the whole parent transcript,
+    // which is what an omitted `before` asks for.
+    const forked = await opencodeClient.forkSession(input.parentSessionId, {
+      before: forkPointMessageID ?? undefined,
+      directory: input.directory,
+    });
 
     // The server may canonicalize the worktree path; the prompt must use the
     // same directory identity as the forked session.

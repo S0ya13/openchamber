@@ -19,7 +19,7 @@ const sessionInfo: SessionInfo = {
   tokens: { input: 10, output: 20, reasoning: 0, cache: { read: 0, write: 0 } },
   time: { created: 100, updated: 200 },
   title: "Hello",
-  location: { directory: "/repo/app", workspaceID: "ws_1" },
+  location: { directory: "/repo/app" },
   metadata: { pinned: true },
 }
 
@@ -27,7 +27,6 @@ describe("projectSession", () => {
   test("lifts location onto the session and keeps optional fields absent", () => {
     const session = projectSession(sessionInfo)
     expect(session.directory).toBe("/repo/app")
-    expect(session.workspaceID).toBe("ws_1")
     expect(session.title).toBe("Hello")
     expect(session.metadata).toEqual({ pinned: true })
     expect("parentID" in session).toBe(false)

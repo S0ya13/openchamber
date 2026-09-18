@@ -2,7 +2,7 @@
 
 Background LLM calls for OpenChamber's own features — session titles, goal
 distillation, session assist, the changes walkthrough. Every call goes to the
-running OpenCode through `POST /api/generate`; OpenChamber never talks to a
+running OpenCode through `POST /api/experimental/generate`; OpenChamber never talks to a
 provider directly and never handles a provider credential.
 
 ## Security boundary
@@ -32,7 +32,7 @@ credentials, the provider dispatch and the token refresh. Routes live under
 ## Free tier and the session fallback
 
 OpenCode's free zen models are listed as enabled without a login, but
-`/api/generate` refuses them ("free tier can only be used in OpenCode") and
+`/api/experimental/generate` refuses them ("free tier can only be used in OpenCode") and
 `/api/model/default` answers nothing, so on a fresh install with no provider
 login `generateSmallModelText` throws `404`. What happens next is per feature:
 
@@ -90,7 +90,7 @@ refusal — the cost is the reason, not the transport.
 
 ## Prompt shape
 
-`/api/generate` takes one prompt and no system message, so `system` leads the
+`/api/experimental/generate` takes one prompt and no system message, so `system` leads the
 prompt, separated by a blank line.
 
 Input clamp: the prompt is measured against the resolved model's `limit.context`
@@ -106,7 +106,7 @@ what an oversized prompt means:
   model instead of returning confident nonsense.
 
 Output budget: `maxOutputTokens` is capped at the model's `limit.output`, and
-the **same number** is reserved from the input allowance. `/api/generate` takes
+the **same number** is reserved from the input allowance. `/api/experimental/generate` takes
 no output budget of its own, so this number only shapes the reserve — but the
 two sides must stay equal or a caller that asks for a large answer overruns the
 context and the failure looks like a truncation bug.
@@ -130,7 +130,7 @@ generation own their error toast and suppress the shared request toast.
 
 ## Structured output
 
-`/api/generate` has no structured-output mode. `responseSchema` is therefore
+`/api/experimental/generate` has no structured-output mode. `responseSchema` is therefore
 emulated: the schema is appended to the prompt as "Reply with JSON matching this
 schema and nothing else: …", and the reply is parsed here. A ```json fence is
 stripped. An unparseable reply is retried **once** — a model that ignored the

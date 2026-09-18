@@ -375,6 +375,13 @@ function toMcpTimeout(value) {
   return flat === undefined ? undefined : { catalog: flat, execution: flat };
 }
 
+const MCP_PROTOCOLS = new Set(['legacy', 'auto', '2026-07-28']);
+
+/** MCP protocol negotiation, added in OpenCode 2.0.8. Unknown values are dropped. */
+function toMcpProtocol(value) {
+  return MCP_PROTOCOLS.has(value) ? value : undefined;
+}
+
 /** v1 OAuth camelCase becomes v2 snake_case. */
 function toMcpOAuth(value) {
   if (value === false) return false;
@@ -385,6 +392,9 @@ function toMcpOAuth(value) {
     ['scope', trimmedString(value.scope)],
     ['callback_port', positiveInt(value.callback_port ?? value.callbackPort)],
     ['redirect_uri', trimmedString(value.redirect_uri ?? value.redirectUri)],
+    // OpenCode 2.0.8 addition. OpenChamber has no UI for it; it is carried
+    // through so a hand-written value survives an edit made here.
+    ['auth_server_metadata_url', trimmedString(value.auth_server_metadata_url)],
   ]);
   return Object.keys(oauth).length ? oauth : undefined;
 }
@@ -409,6 +419,9 @@ function toMcpEntity(raw) {
     ['disabled', disabled],
     ['codemode', typeof source.codemode === 'boolean' ? source.codemode : undefined],
     ['timeout', toMcpTimeout(source.timeout)],
+    // OpenCode 2.0.8 addition, on both local and remote entries. No OpenChamber
+    // UI for it yet; carried through so a hand-written value is not dropped.
+    ['protocol', toMcpProtocol(source.protocol)],
   ]);
   if (type === 'local') {
     const command = Array.isArray(source.command) && source.command.length > 0

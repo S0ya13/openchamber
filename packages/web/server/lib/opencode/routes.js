@@ -128,20 +128,20 @@ export const registerOpenCodeRoutes = (app, dependencies) => {
       // the Update action only when `upgrade.supported` is true.
       const capability = getOpenCodeUpgradeCapability();
       const [healthResponse, latestVersion] = await Promise.all([
-        fetch(buildOpenCodeUrl('/api/health', ''), {
+        fetch(buildOpenCodeUrl('/api/info', ''), {
           method: 'GET',
           headers: { Accept: 'application/json', ...getOpenCodeAuthHeaders() },
         }),
         fetchLatestOpenCodeVersion(),
       ]);
-      const health = await healthResponse.json().catch(() => null);
+      const info = await healthResponse.json().catch(() => null);
       if (!healthResponse.ok) {
         return res.status(healthResponse.status).json({
           available: null,
-          error: health?.error || healthResponse.statusText || 'Failed to read OpenCode version',
+          error: info?.error || healthResponse.statusText || 'Failed to read OpenCode version',
         });
       }
-      const currentVersion = typeof health?.version === 'string' ? health.version.replace(/^v/, '') : null;
+      const currentVersion = typeof info?.version === 'string' ? info.version.replace(/^v/, '') : null;
       if (!currentVersion || !latestVersion) {
         return res.json({ available: null, currentVersion, latestVersion: latestVersion || null, upgrade: capability });
       }
@@ -162,20 +162,23 @@ export const registerOpenCodeRoutes = (app, dependencies) => {
     }
   });
 
+  // OpenCode 2.0.8 removed `GET /api/health`; `GET /api/info` replaces it and a
+  // 200 from it is the readiness signal (there is no `healthy` field any more).
+  // OpenChamber's own `{ healthy }` response shape stays as its clients know it.
   app.get('/api/opencode/health', async (_req, res) => {
     try {
-      const healthResponse = await fetch(buildOpenCodeUrl('/api/health', ''), {
+      const healthResponse = await fetch(buildOpenCodeUrl('/api/info', ''), {
         method: 'GET',
         headers: { Accept: 'application/json', ...getOpenCodeAuthHeaders() },
       });
-      const health = await healthResponse.json().catch(() => null);
+      const info = await healthResponse.json().catch(() => null);
       if (!healthResponse.ok) {
         return res.status(healthResponse.status).json({
           healthy: false,
-          error: health?.error || healthResponse.statusText || 'OpenCode health check failed',
+          error: info?.error || healthResponse.statusText || 'OpenCode health check failed',
         });
       }
-      return res.json({ healthy: health?.healthy === true });
+      return res.json({ healthy: true });
     } catch (error) {
       return res.status(503).json({
         healthy: false,
@@ -186,18 +189,18 @@ export const registerOpenCodeRoutes = (app, dependencies) => {
 
   app.get('/api/opencode/version', async (_req, res) => {
     try {
-      const healthResponse = await fetch(buildOpenCodeUrl('/api/health', ''), {
+      const healthResponse = await fetch(buildOpenCodeUrl('/api/info', ''), {
         method: 'GET',
         headers: { Accept: 'application/json', ...getOpenCodeAuthHeaders() },
       });
-      const health = await healthResponse.json().catch(() => null);
+      const info = await healthResponse.json().catch(() => null);
       if (!healthResponse.ok) {
         return res.status(healthResponse.status).json({
           version: null,
-          error: health?.error || healthResponse.statusText || 'Failed to read OpenCode version',
+          error: info?.error || healthResponse.statusText || 'Failed to read OpenCode version',
         });
       }
-      const version = typeof health?.version === 'string' ? health.version.replace(/^v/, '') : null;
+      const version = typeof info?.version === 'string' ? info.version.replace(/^v/, '') : null;
       return res.json({ version });
     } catch (error) {
       return res.status(500).json({

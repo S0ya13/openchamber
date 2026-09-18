@@ -1,10 +1,10 @@
 import { beforeEach, describe, expect, mock, test } from 'bun:test';
 import type { Message, Part, Session } from '@/lib/opencode/model';
-import type { SessionForkBoundary } from '@opencode/client';
 import type { MessagePage } from '@/lib/opencode/client';
 import type { StartBtwInput } from './btw';
 
-let forkSessionImpl: (sessionId: string, boundary: SessionForkBoundary, directory?: string | null) => Promise<Session>;
+type ForkOptions = { before?: string; directory?: string | null };
+let forkSessionImpl: (sessionId: string, options?: ForkOptions) => Promise<Session>;
 let getSessionMessagesImpl: (id: string, options?: { limit?: number }, directory?: string | null) => Promise<MessagePage>;
 let sendMessageImpl: (...args: unknown[]) => Promise<unknown>;
 let deleteSessionImpl: (sessionId: string) => Promise<boolean>;
@@ -24,8 +24,7 @@ const sessionMessageReads: string[] = [];
 
 mock.module('@/lib/opencode/client', () => ({
   opencodeClient: {
-    forkSession: (sessionId: string, boundary: SessionForkBoundary, directory?: string | null) =>
-      forkSessionImpl(sessionId, boundary, directory),
+    forkSession: (sessionId: string, options?: ForkOptions) => forkSessionImpl(sessionId, options),
     getSessionMessages: (id: string, options?: { limit?: number }, directory?: string | null) => {
       sessionMessageReads.push(id);
       return getSessionMessagesImpl(id, options, directory);
@@ -167,11 +166,11 @@ describe('findLastCompletedAssistantMessageID', () => {
 
 describe('startBtwSession', () => {
   test('forks, marks the fork, links the parent, and routes the question to the fork', async () => {
-    forkSessionImpl = (sessionId, boundary, directory) => {
+    forkSessionImpl = (sessionId, options) => {
       expect(sessionId).toBe('parent-1');
-      // No parent turns at all: fork through the (empty) transcript.
-      expect(boundary).toEqual({ type: 'through', messageID: '' });
-      return Promise.resolve(makeSession('fork-1', directory ?? '/project'));
+      // No parent turns at all: an omitted `before` forks the whole transcript.
+      expect(options?.before).toBeUndefined();
+      return Promise.resolve(makeSession('fork-1', options?.directory ?? '/project'));
     };
     let sentText: unknown = null;
     let sentOptions: unknown = null;
@@ -200,15 +199,15 @@ describe('startBtwSession', () => {
 
   test('forks at the last completed assistant turn, not at the in-flight one', async () => {
     parentSyncMessages.push(assistantMessage('msg-1', 10), userMessage('msg-2'), assistantMessage('msg-3'));
-    const boundaries: SessionForkBoundary[] = [];
-    forkSessionImpl = (_sessionId, boundary) => {
-      boundaries.push(boundary);
+    const boundaries: Array<string | undefined> = [];
+    forkSessionImpl = (_sessionId, options) => {
+      boundaries.push(options?.before);
       return Promise.resolve(makeSession('fork-1', '/project'));
     };
 
     await startBtwSession(startInput);
 
-    expect(boundaries).toEqual([{ type: 'before', messageID: 'msg-1' }]);
+    expect(boundaries).toEqual(['msg-1']);
   });
 
   test('the boundary falls back to the fork point when the cloned tail reads empty', async () => {

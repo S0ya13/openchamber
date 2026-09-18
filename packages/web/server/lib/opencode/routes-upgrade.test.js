@@ -55,7 +55,7 @@ describe('OpenCode upgrade routes', () => {
     globalThis.fetch = vi.fn(async (url) => {
       if (String(url).includes('registry.npmjs.org')) return jsonResponse({ version: '2.0.3' });
       if (String(url).includes('api.github.com')) return jsonResponse({ tag_name: 'v2.0.3' });
-      return jsonResponse({ healthy: true, version: '1.18.8' });
+      return jsonResponse({ version: '1.18.8', pid: 1, urls: [], paths: { tmp: '/tmp' } });
     });
     const { app } = createApp();
 

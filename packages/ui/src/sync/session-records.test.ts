@@ -36,7 +36,7 @@ describe("upsertSessionRecord", () => {
   })
 
   const changes: Array<[string, Partial<Session>, Partial<Session>]> = [
-    ["scalars", { workspaceID: "one", subpath: "a", parentID: "p", cost: 1, agent: "a" }, { workspaceID: "two", subpath: "b", parentID: "q", cost: 2, agent: "b" }],
+    ["scalars", { title: "one", subpath: "a", parentID: "p", cost: 1, agent: "a" }, { title: "two", subpath: "b", parentID: "q", cost: 2, agent: "b" }],
     ["tokens", { tokens: { input: 1, output: 2, reasoning: 3, cache: { read: 4, write: 5 } } }, { tokens: { input: 1, output: 2, reasoning: 3, cache: { read: 4, write: 6 } } }],
     ["model", { model: { id: "m", providerID: "p", variant: "a" } }, { model: { id: "m", providerID: "p", variant: "b" } }],
     ["metadata", { metadata: { key: "a" } }, { metadata: { key: "b" } }],

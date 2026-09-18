@@ -15,11 +15,11 @@ const createManager = (mode: 'managed' | 'external' = 'managed'): OpenCodeUpgrad
 });
 
 describe('VS Code OpenCode upgrades', () => {
-  test('reports installed and latest versions from the v2 health route', async () => {
+  test('reports installed and latest versions from the v2 info route', async () => {
     const manager = createManager();
     globalThis.fetch = (async (input: Parameters<typeof fetch>[0]) => {
       const url = String(input);
-      if (url.endsWith('/api/health')) return new Response(JSON.stringify({ healthy: true, version: '2.0.1' }));
+      if (url.endsWith('/api/info')) return new Response(JSON.stringify({ version: '2.0.1', pid: 1, urls: [], paths: { tmp: '/tmp' } }));
       if (url.includes('registry.npmjs.org')) return new Response(JSON.stringify({ version: '2.0.2' }));
       return new Response(JSON.stringify({ tag_name: 'v2.0.2' }));
     }) as typeof fetch;
@@ -36,7 +36,7 @@ describe('VS Code OpenCode upgrades', () => {
     const manager = createManager('external');
     globalThis.fetch = (async (input: Parameters<typeof fetch>[0]) => {
       const url = String(input);
-      if (url.endsWith('/api/health')) return new Response(JSON.stringify({ healthy: true, version: '2.0.2' }));
+      if (url.endsWith('/api/info')) return new Response(JSON.stringify({ version: '2.0.2', pid: 1, urls: [], paths: { tmp: '/tmp' } }));
       return new Response(JSON.stringify({ version: '2.0.2' }));
     }) as typeof fetch;
 

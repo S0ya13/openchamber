@@ -17,7 +17,7 @@ Keep `bridge.ts` as a thin orchestration layer that delegates message handling t
 
 - `bridge-git-special-runtime.ts`
   - Specialized Git flows (`pr-description`, `conflict-details`) and generation helpers.
-  - Generation runs through OpenCode's `POST /api/generate`, which answers with the finished text. There is no throwaway session to create, poll and delete any more.
+  - Generation runs through OpenCode's `POST /api/experimental/generate`, which answers with the finished text. There is no throwaway session to create, poll and delete any more.
   - Generation model choice lives in `bridge-git-generation-model.ts`: request model first, then the user's small-model override (`smallModelUseDefault === false` plus `smallModelOverride` as `provider/model`) when the catalog has it, then the zen fallback. The old `gitProviderId`/`gitModelId` pair is no longer read.
 
 - `bridge-git-process-runtime.ts`
@@ -242,8 +242,10 @@ spawning a managed server and refuses to start on anything else
 start and serve a different API, leaving the user with a webview that loads and
 then fails every request, so the failure is reported up front instead.
 
-Readiness comes from the `server listening on <url>` line on stdout, and health
-from `GET /api/health`.
+Readiness comes from the `server listening on <url>` line on stdout, confirmed
+by `GET /api/info` (OpenCode 2.0.8 removed `/api/health`). A 200 is the whole
+readiness answer; the payload carries `{ version, pid, urls, paths }` and no
+`healthy` field.
 
 ## Global OpenCode paths
 

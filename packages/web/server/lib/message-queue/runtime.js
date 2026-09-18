@@ -503,7 +503,8 @@ export function createMessageQueueRuntime({
         directory,
         method: 'POST',
         body: {
-          command: command.name,
+          // OpenCode 2.0.8 renamed the command body field `command` to `name`.
+          name: command.name,
           text: command.arguments,
           ...(promptFiles.length > 0 ? { files: promptFiles } : {}),
         },

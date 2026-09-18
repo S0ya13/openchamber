@@ -17,7 +17,7 @@ const HEALTH_CHECK_MAX_CONSECUTIVE_FAILURES = parsePositiveInt(
 );
 const HEALTH_CHECK_INTERVAL_OVERRIDE_MS = parsePositiveInt(process.env.OPENCHAMBER_OPENCODE_HEALTH_INTERVAL_MS, 0);
 const HEALTH_CHECK_RESULT_CACHE_MS = parsePositiveInt(process.env.OPENCHAMBER_OPENCODE_HEALTH_CACHE_MS, 750);
-const OPENCODE_HEALTH_PATH = '/api/health';
+const OPENCODE_HEALTH_PATH = '/api/info';
 const OPENCODE_REQUIRED_MAJOR_VERSION = 2;
 
 /**
@@ -28,8 +28,10 @@ const OPENCODE_REQUIRED_MAJOR_VERSION = 2;
  *
  * The version comes from the health payload rather than from `opencode
  * --version`: it costs no extra process, and it also covers an external
- * OpenCode the user started themselves. `/api/health` only exists in 2.x, so a
- * 404 there is the same answer by another route.
+ * OpenCode the user started themselves. `/api/info` only exists in 2.x (2.0.8
+ * removed the older `/api/health`), so a 404 there is the same answer by
+ * another route. A 200 is the readiness signal; the payload has no `healthy`
+ * field, only `{ version, pid, urls, paths }`.
  */
 const OPENCODE_VERSION_REQUIREMENT_DETAIL =
   `OpenChamber requires OpenCode ${OPENCODE_REQUIRED_MAJOR_VERSION}.x`;
@@ -609,8 +611,8 @@ export const createOpenCodeLifecycleRuntime = (deps) => {
           failure: {
             class: 'invalid_response',
             detail: response.status === 404
-              ? `${OPENCODE_VERSION_REQUIREMENT_DETAIL}: this server has no /api/health, which every 2.x server serves.`
-              : `Health endpoint returned HTTP ${response.status ?? 'unknown'}`,
+              ? `${OPENCODE_VERSION_REQUIREMENT_DETAIL}: this server has no /api/info, which every 2.x server serves.`
+              : `Info endpoint returned HTTP ${response.status ?? 'unknown'}`,
           },
         };
       }
@@ -622,16 +624,7 @@ export const createOpenCodeLifecycleRuntime = (deps) => {
           healthy: false,
           failure: {
             class: 'invalid_response',
-            detail: 'Health endpoint returned invalid JSON',
-          },
-        };
-      }
-      if (body?.healthy !== true) {
-        return {
-          healthy: false,
-          failure: {
-            class: 'invalid_response',
-            detail: 'Health endpoint did not report healthy=true',
+            detail: 'Info endpoint returned invalid JSON',
           },
         };
       }
@@ -671,9 +664,8 @@ export const createOpenCodeLifecycleRuntime = (deps) => {
         signal: controller.signal,
       });
       clearTimeout(timeout);
-      if (!response.ok) return false;
-      const body = await response.json().catch(() => null);
-      return body?.healthy === true;
+      // A 200 from `/api/info` is the whole readiness answer in 2.0.8.
+      return response.ok;
     } catch {
       return false;
     }
@@ -970,14 +962,7 @@ export const createOpenCodeLifecycleRuntime = (deps) => {
         timeout = null;
 
         if (!response.ok) {
-          lastError = new Error(`OpenCode health endpoint responded with status ${response.status}`);
-          await new Promise((resolve) => setTimeout(resolve, intervalMs));
-          continue;
-        }
-
-        const body = await response.json().catch(() => null);
-        if (body?.healthy !== true) {
-          lastError = new Error('OpenCode health endpoint returned unhealthy response');
+          lastError = new Error(`OpenCode info endpoint responded with status ${response.status}`);
           await new Promise((resolve) => setTimeout(resolve, intervalMs));
           continue;
         }

@@ -26,7 +26,7 @@ describe("v2 status and cancellation HTTP boundary", () => {
       expect(await opencodeClient.listPendingForms(options)).toEqual([])
       expect(await opencodeClient.listPendingPermissions(options)).toEqual([])
       expect(requests).toEqual([
-        { path: "/api/form/request", directory: encodeURIComponent("C:/Tree with spaces") },
+        { path: "/api/form", directory: encodeURIComponent("C:/Tree with spaces") },
         { path: "/api/permission/request", directory: encodeURIComponent("C:/Tree with spaces") },
       ])
       requests.length = 0
