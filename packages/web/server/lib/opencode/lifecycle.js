@@ -4,6 +4,7 @@ import { stripAppImageArgv0Leak } from '../inherited-env.js';
 import { registerManagedProcess, unregisterManagedProcess, reapOrphanedProcesses } from './managed-process-registry.js';
 import { applyProviderEnvAliases } from './provider-env-aliases.js';
 import { recordStartupPerformance } from './startup-performance.js';
+import { topUpV1Migration } from './v1-migration-topup.js';
 
 const parsePositiveInt = (value, fallback) => {
   const parsed = Number.parseInt(String(value ?? ''), 10);
@@ -139,6 +140,7 @@ export const createOpenCodeLifecycleRuntime = (deps) => {
     onOpenCodeRestarted = null,
     managedStartupTimeoutMs = 30_000,
     now = Date.now,
+    topUpV1SessionMigration = topUpV1Migration,
   } = deps;
 
   const killProcessOnPortWin32 = (port) => {
@@ -728,6 +730,18 @@ export const createOpenCodeLifecycleRuntime = (deps) => {
       totalDurationMs: performance.now() - attemptStartedAt,
     });
     phaseStartedAt = performance.now();
+
+    // Re-arm OpenCode's own V1 -> V2 session import for sessions a bundled
+    // OpenCode 1.x created after the migration already completed. Only for the
+    // managed process, only while it is not running, and never fatal.
+    try {
+      const topUp = topUpV1SessionMigration();
+      if (topUp && topUp.status !== 'skipped') {
+        console.log('[OpenCode] V1 session migration top-up:', topUp);
+      }
+    } catch (error) {
+      console.warn('[OpenCode] V1 session migration top-up failed:', error instanceof Error ? error.message : error);
+    }
 
     let serverInstance;
     try {

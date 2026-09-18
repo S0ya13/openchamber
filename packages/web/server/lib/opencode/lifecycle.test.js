@@ -114,6 +114,8 @@ const createRuntime = (overrides = {}, stateOverrides = {}, envOverrides = {}) =
     clearResolvedOpenCodeBinary: vi.fn(),
     buildAugmentedPath: vi.fn(() => '/home/user/.bun/bin:/usr/local/bin:/usr/bin'),
     buildManagedOpenCodePath: vi.fn(() => '/home/user/.bun/bin:/usr/local/bin:/usr/bin'),
+    // Never let a test touch the real `~/.local/share/opencode/opencode.db`.
+    topUpV1SessionMigration: vi.fn(() => ({ status: 'skipped', missing: 0, revisited: 0, reason: 'no-database' })),
     getManagedOpenCodeShellEnvSnapshot: vi.fn(() => ({
       PATH: '/home/user/.bun/bin:/usr/local/bin:/usr/bin',
       SHELL_ONLY: 'yes',
@@ -876,6 +878,28 @@ describe('OpenCode lifecycle', () => {
     expect(spawnMock).toHaveBeenCalledTimes(2);
     await server.close();
   });
+
+  it('tops up the v1 session migration before spawning managed OpenCode', async () => {
+    const calls = [];
+    const topUpV1SessionMigration = vi.fn(() => {
+      calls.push('top-up');
+      return { status: 'scheduled', missing: 3, revisited: 0 };
+    });
+    spawnMock.mockImplementation(() => {
+      calls.push('spawn');
+      const child = createMockChild();
+      queueMicrotask(() => child.stdout.emit('data', 'opencode server listening on http://127.0.0.1:45678\n'));
+      return child;
+    });
+    globalThis.fetch = vi.fn(async () => ({ ok: false }));
+
+    const runtime = createRuntime({ topUpV1SessionMigration });
+    await runtime.startOpenCode();
+
+    expect(topUpV1SessionMigration).toHaveBeenCalledTimes(1);
+    expect(calls).toEqual(['top-up', 'spawn']);
+  });
+
 });
 
 describe('killProcessOnPort on Windows', () => {

@@ -10,6 +10,7 @@ This module provides OpenCode server integration utilities for the web server ru
 - `packages/web/server/lib/opencode/cli-options.js`: CLI/environment option parsing for server startup arguments.
 - `packages/web/server/lib/opencode/cli-entry-runtime.js`: CLI entrypoint runtime that detects direct execution, parses CLI options, and starts server bootstrap.
 - `packages/web/server/lib/opencode/routes.js`: OpenCode/provider settings and auth-related route registration.
+- `packages/web/server/lib/opencode/v1-migration-topup.js`: re-arms OpenCode's own V1 -> V2 session import for V1 sessions created after that migration already completed; runs only before a managed spawn. See "v1-migration-topup.js" below.
 - `packages/web/server/lib/opencode/lifecycle.js`: OpenCode process lifecycle runtime (startup, restart, readiness, health monitoring). After readiness it warms the most recently used directories (`getWarmupDirectories` dep, sequential and best-effort) because OpenCode initializes each directory lazily on first request and that cost would otherwise be paid by the user's first interactive session open.
 - `packages/web/server/lib/opencode/provider-env-aliases.js`: mirrors known provider credential env aliases into the managed OpenCode process environment (for example `GEMINI_API_KEY` → `GOOGLE_GENERATIVE_AI_API_KEY`) so OpenCode connection detection and the upstream AI SDK agree on the same key names. Canonical implementation shared by web lifecycle and the VS Code managed spawn path (`packages/vscode/src/provider-env-aliases.ts` re-exports this module).
 - `packages/web/server/lib/opencode/env-runtime.js`: OpenCode CLI/binary resolution and shell environment runtime.
@@ -122,6 +123,50 @@ runtime, no file, a changed schema), so the caller can tell "no credentials"
 from "could not look" and fall back to the file. `node:sqlite` on Node 22.13+,
 `bun:sqlite` on Bun; no dependency is added. `packages/vscode/src/opencodeAuth.ts`
 is the extension-host mirror.
+
+### v1-migration-topup.js
+
+OpenCode 2.x imports the legacy `session`/`message`/`part` tables into
+`session_v2`/`session_message` once and then records `{"phase":"completed"}`
+under `migration.v1-v2` in the `kv` table. Anyone who kept using a bundled
+OpenCode 1.x beside a v2 install created V1 sessions after that point, and
+OpenCode never looks at them again — they are simply missing from the session
+list. `topUpV1Migration()` hands OpenCode a resume cursor so its own migration
+picks them up. OpenChamber never writes session rows itself.
+
+It runs from `lifecycle.js` immediately before the MANAGED OpenCode is spawned:
+never for an external, user-started OpenCode, and never while a managed one is
+running, because the write would race OpenCode's own loop. Failure is never
+fatal to startup. It opens `<data>/opencode.db` (or `OPENCODE_DB`) read-write
+with the same loader strategy as `credential-db.js` — `node:sqlite` on Node,
+`bun:sqlite` on Bun, skip silently on neither. It returns
+`{ status: 'skipped' | 'scheduled' | 'unsafe' | 'unavailable', missing, revisited, reason? }`
+and logs one line; there is no HTTP route and no UI.
+
+What it does: when the migration row says `completed` and some `session` rows
+have no `session_v2` twin, it sets the row to `{"phase":"sessions","cursor":…}`.
+The cursor is the largest missing id plus `U+FFFF`, because OpenCode's loop
+walks `id < cursor` in descending id order and ids are fixed width, so nothing
+real can fall between an id and that cursor. Ids are compared the way SQLite
+does (BINARY/memcmp; neither id column declares a collation). Session ids
+encode time descending in a field that wraps, so id order is **not** time
+order — an August session can sort far below a newer one, and the code never
+assumes otherwise.
+
+Two hard rules, both verified against v2.0.8
+`packages/core/src/database/v1-migration.bun.ts`:
+
+- **Never clear or delete the `migration.v1-v2` row.** With no row at all
+  OpenCode treats the database as pre-migration and DELETEs the whole `event`
+  table, v2's durable event log.
+- **Never make OpenCode revisit a session that has v2 activity.** Every session
+  the loop visits gets its `session_message` rows deleted and replaced by the
+  V1 transform. Before writing a cursor, the top-up lists the already-migrated
+  sessions below it and looks for a message created after the migration
+  completed, a `session_v2.time_updated` after it, or a message `type` the V1
+  transform never emits (it only produces `user`, `assistant`, `synthetic`,
+  `compaction`). Any hit and nothing is written: the outcome is `unsafe` and a
+  single warning names how many sessions stay missing.
 
 ## Public exports (providers.js)
 - `getProviderSources(providerId, workingDirectory)`: Resolves which OpenCode config layers define a provider.
