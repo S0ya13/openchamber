@@ -1547,6 +1547,8 @@ async function main(options = {}) {
       const address = server?.address?.();
       return typeof address === 'object' && address ? address.port : null;
     },
+    // A pipe listener reports a string here, which has no address to bind back to.
+    getActiveHost: () => server?.address?.()?.address ?? null,
   });
   systemPromptRuntime = createSystemPromptRuntime({
     fsPromises,

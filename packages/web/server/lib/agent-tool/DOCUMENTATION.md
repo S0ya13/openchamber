@@ -30,8 +30,10 @@ both settings are `false`.
 2. `prepareManagedOpenCodeEnv()` materializes the plugin under
    `<openchamber-data-dir>/agent-tool/` and appends its `file://` URL to
    `OPENCODE_CONFIG_CONTENT` without replacing existing plugin entries.
-3. A random per-child token and loopback callback URL are added only to the
-   managed OpenCode child environment.
+3. A random per-child token and callback URL are added only to the managed
+   OpenCode child environment. The URL points at loopback, except when the
+   listener is bound to one concrete address (`--host <ip>`): that socket does
+   not answer on loopback, so the URL uses the bound address instead.
 4. The plugin calls `POST /api/openchamber/agent-tool` with its typed input and
    OpenCode's authoritative session directory.
 5. The route delegates the fixed action allowlist directly to the shared
@@ -69,10 +71,18 @@ both settings are `false`.
 
 ## Security invariants
 
-- The callback accepts loopback requests only and requires the current
-  per-child bearer token using a timing-safe comparison.
+- The callback accepts same-machine requests only and requires the current
+  per-child bearer token using a timing-safe comparison. Same-machine means a
+  loopback source, or, for a listener bound to one concrete address, a source
+  equal to that address: the OS sources a local connection to `<ip>` from
+  `<ip>`. A wildcard bind keeps the loopback-only rule, and another machine on
+  the network always arrives with its own address.
 - The token is never persisted, logged, returned to the UI, or written into
   the materialized plugin.
+- The plugin adds the callback host to `NO_PROXY`/`no_proxy` inside the managed
+  child when it loads. Without that, an `HTTP_PROXY` in the child's environment
+  would receive a non-loopback callback, token included, because `fetch` has no
+  per-request way to skip the environment proxy.
 - Inputs map to a fixed action and parameter allowlist. There is no arbitrary
   CLI, shell, route, or URL forwarding.
 - Session/worktree deletion and project-path registration are not exposed.

@@ -129,11 +129,24 @@ const createResult = ({ ok, action, data, error, exitCode }) => ({
   ...(Number.isInteger(exitCode) ? { exitCode } : {}),
 });
 
+// Node reports an IPv4 peer on a dual-stack socket as `::ffff:<ipv4>`.
+const normalizeAddress = (value) => {
+  const address = (asNonEmptyString(value) || '').toLowerCase();
+  return address.startsWith('::ffff:') ? address.slice('::ffff:'.length) : address;
+};
+
 const isLoopbackAddress = (value) => {
-  const address = typeof value === 'string' ? value.toLowerCase() : '';
-  return address === '127.0.0.1'
-    || address === '::1'
-    || address === '::ffff:127.0.0.1';
+  const address = normalizeAddress(value);
+  return address === '127.0.0.1' || address === '::1';
+};
+
+const WILDCARD_ADDRESSES = new Set(['0.0.0.0', '::']);
+
+// A wildcard listener answers on loopback. A listener bound to one concrete
+// address answers only there, so that address is the only way back in.
+const resolveConcreteBoundAddress = (value) => {
+  const address = normalizeAddress(value);
+  return address && !WILDCARD_ADDRESSES.has(address) ? address : null;
 };
 
 /**
@@ -245,10 +258,28 @@ const createPluginSource = ({ includeControl, includeWeb, includeMemory }) => {
     }));
   }
 
-  return `export const OpenChamberPlugin = async () => ({
-  tool: {
-${entries.join('')}  },
-})
+  // The callback carries the per-child token over plain HTTP. With a proxy in
+  // the child's environment, fetch would hand a non-loopback callback, token
+  // included, to that proxy, and no per-request option turns that off. The
+  // exemption is added inside the child because only there is the final
+  // NO_PROXY, merged from the shell and server environments, visible.
+  return `const exemptCallbackFromProxy = () => {
+  const endpoint = process.env.OPENCHAMBER_AGENT_TOOL_URL
+  if (!endpoint || !URL.canParse(endpoint)) return
+  const host = new URL(endpoint).hostname.replace(/^\\[|\\]$/g, "")
+  for (const key of ["NO_PROXY", "no_proxy"]) {
+    const entries = (process.env[key] || "").split(",").map((entry) => entry.trim()).filter(Boolean)
+    if (!entries.includes(host)) process.env[key] = [...entries, host].join(",")
+  }
+}
+
+export const OpenChamberPlugin = async () => {
+  exemptCallbackFromProxy()
+  return {
+    tool: {
+${entries.join('')}    },
+  }
+}
 `;
 };
 
@@ -259,12 +290,15 @@ export const createAgentToolRuntime = (dependencies) => {
     path,
     dataDir,
     getActivePort,
+    getActiveHost = () => null,
     executeAction,
     env = process.env,
   } = dependencies;
   const pluginDirectory = path.join(dataDir, 'agent-tool');
   const pluginPath = path.join(pluginDirectory, 'openchamber-plugin.js');
   let activeToken = null;
+
+  const getConcreteBoundAddress = () => resolveConcreteBoundAddress(getActiveHost());
 
   const prepareManagedOpenCodeEnv = async ({ includeControl = true, includeWeb = true, includeMemory = true } = {}) => {
     const port = getActivePort();
@@ -278,15 +312,26 @@ export const createAgentToolRuntime = (dependencies) => {
     await fsPromises.writeFile(pluginPath, createPluginSource({ includeControl, includeWeb, includeMemory }), { mode: 0o600 });
     activeToken = crypto.randomBytes(32).toString('base64url');
     const pluginUrl = pathToFileURL(pluginPath).href;
+    const callbackAddress = getConcreteBoundAddress() || '127.0.0.1';
+    const callbackHost = callbackAddress.includes(':') ? `[${callbackAddress}]` : callbackAddress;
     return {
       OPENCODE_CONFIG_CONTENT: appendManagedPlugin(env.OPENCODE_CONFIG_CONTENT, pluginUrl, 'managed tool'),
-      OPENCHAMBER_AGENT_TOOL_URL: `http://127.0.0.1:${port}/api/openchamber/agent-tool`,
+      OPENCHAMBER_AGENT_TOOL_URL: `http://${callbackHost}:${port}/api/openchamber/agent-tool`,
       OPENCHAMBER_AGENT_TOOL_TOKEN: activeToken,
     };
   };
 
+  // The managed child runs on this machine. Reaching a listener bound to one
+  // concrete address makes the OS source the connection from that same address,
+  // so it stands in for loopback there; any other machine arrives as itself.
+  const isSameMachineAddress = (value) => {
+    if (isLoopbackAddress(value)) return true;
+    const boundAddress = getConcreteBoundAddress();
+    return boundAddress !== null && normalizeAddress(value) === boundAddress;
+  };
+
   const authorize = (req) => {
-    if (!activeToken || !isLoopbackAddress(req.socket?.remoteAddress)) return false;
+    if (!activeToken || !isSameMachineAddress(req.socket?.remoteAddress)) return false;
     const header = asNonEmptyString(req.headers?.authorization);
     if (!header?.startsWith('Bearer ')) return false;
     const provided = Buffer.from(header.slice(7));
