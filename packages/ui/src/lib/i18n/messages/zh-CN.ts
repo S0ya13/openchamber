@@ -427,6 +427,7 @@ export const dict: Record<I18nKey, string> = {
   'multirun.launcher.models.info': '选择 2 个或更多模型。同一模型可重复添加。',
   'multirun.launcher.toast.fileTooLarge': '文件“{fileName}”过大（最大 10MB）',
   'multirun.launcher.toast.attachFailed': '附加“{fileName}”失败',
+  'multirun.launcher.toast.partialFailure': '部分会话未能创建。失败数量：{failed}。',
   'multirun.launcher.toast.attachedSingle': '已附加 {count} 个文件',
   'multirun.launcher.toast.attachedPlural': '已附加 {count} 个文件',
   'multirun.modelMultiSelect.actions.addModel': '添加模型',

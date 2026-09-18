@@ -427,6 +427,7 @@ export const dict: Record<I18nKey, string> = {
   'multirun.launcher.models.info': '2つ以上のモデルを選択。同じモデルを複数回追加できます。',
   'multirun.launcher.toast.fileTooLarge': 'ファイル「{fileName}」が大きすぎます（最大10MB）',
   'multirun.launcher.toast.attachFailed': '「{fileName}」の添付に失敗しました',
+  'multirun.launcher.toast.partialFailure': '一部のセッションを作成できませんでした。失敗数: {failed}。',
   'multirun.launcher.toast.attachedSingle': '{count}ファイルを添付しました',
   'multirun.launcher.toast.attachedPlural': '{count}ファイルを添付しました',
   'multirun.modelMultiSelect.actions.addModel': 'モデルを追加',

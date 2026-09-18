@@ -427,6 +427,7 @@ export const dict: Record<I18nKey, string> = {
   'multirun.launcher.models.info': '모델을 2개 이상 선택하세요. 같은 모델을 여러 번 추가할 수 있습니다.',
   'multirun.launcher.toast.fileTooLarge': '파일 "{fileName}"이 너무 큽니다(최대 10MB)',
   'multirun.launcher.toast.attachFailed': '"{fileName}" 첨부 실패',
+  'multirun.launcher.toast.partialFailure': '일부 세션을 만들지 못했습니다. 실패 수: {failed}.',
   'multirun.launcher.toast.attachedSingle': '파일 {count}개 첨부됨',
   'multirun.launcher.toast.attachedPlural': '파일 {count}개 첨부됨',
   'multirun.modelMultiSelect.actions.addModel': '모델 추가',

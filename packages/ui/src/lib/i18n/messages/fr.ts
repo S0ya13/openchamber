@@ -256,6 +256,7 @@ export const dict = {
   'multirun.launcher.models.info': 'Sélectionnez 2 modèles ou plus. Le même modèle peut être ajouté plusieurs fois.',
   'multirun.launcher.toast.fileTooLarge': 'Le fichier "{fileName}" est trop volumineux (max 10 Mo)',
   'multirun.launcher.toast.attachFailed': 'Échec de la connexion de "{fileName}"',
+  'multirun.launcher.toast.partialFailure': 'Certaines sessions n’ont pas pu être créées. Échecs : {failed}.',
   'multirun.launcher.toast.attachedSingle': 'Fichier {count} joint',
   'multirun.launcher.toast.attachedPlural': 'Fichiers {count} joints',
   'multirun.modelMultiSelect.actions.addModel': 'Ajouter un modèle',

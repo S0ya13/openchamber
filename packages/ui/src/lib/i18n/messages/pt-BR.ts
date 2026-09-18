@@ -427,6 +427,7 @@ export const dict: Record<I18nKey, string> = {
   "multirun.launcher.models.info": "Selecione 2 ou mais modelos. O mesmo modelo pode ser adicionado várias vezes.",
   "multirun.launcher.toast.fileTooLarge": "O arquivo \"{fileName}\" é grande demais (máximo 10MB)",
   "multirun.launcher.toast.attachFailed": "Não foi possível anexar \"{fileName}\"",
+  'multirun.launcher.toast.partialFailure': 'Não foi possível criar algumas sessões. Falhas: {failed}.',
   "multirun.launcher.toast.attachedSingle": "Arquivo anexado ({count})",
   "multirun.launcher.toast.attachedPlural": "Arquivos anexados ({count})",
   "multirun.modelMultiSelect.actions.addModel": "Adicionar modelo",

@@ -426,6 +426,7 @@ export const dict = {
   'multirun.launcher.models.info': 'Select 2 or more models. Same model can be added multiple times.',
   'multirun.launcher.toast.fileTooLarge': 'File "{fileName}" is too large (max 10MB)',
   'multirun.launcher.toast.attachFailed': 'Failed to attach "{fileName}"',
+  'multirun.launcher.toast.partialFailure': 'Some sessions could not be created. Failed: {failed}.',
   'multirun.launcher.toast.attachedSingle': 'Attached {count} file',
   'multirun.launcher.toast.attachedPlural': 'Attached {count} files',
   'multirun.modelMultiSelect.actions.addModel': 'Add model',

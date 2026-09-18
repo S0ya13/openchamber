@@ -413,6 +413,7 @@ export const dict = {
   'multirun.launcher.models.info': '2 veya daha fazla model seçin. Aynı model birden çok kez eklenebilir.',
   'multirun.launcher.toast.fileTooLarge': '"{fileName}" dosyası çok büyük (en fazla 10MB)',
   'multirun.launcher.toast.attachFailed': '"{fileName}" eklenemedi',
+  'multirun.launcher.toast.partialFailure': 'Bazı oturumlar oluşturulamadı. Başarısız olan: {failed}.',
   'multirun.launcher.toast.attachedSingle': '{count} dosya eklendi',
   'multirun.launcher.toast.attachedPlural': '{count} dosya eklendi',
   'multirun.modelMultiSelect.actions.addModel': 'Model ekle',
