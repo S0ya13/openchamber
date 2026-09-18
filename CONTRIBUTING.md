@@ -175,6 +175,9 @@ Every pull request must explain:
   evidence.
 - **Live run:** if your change touches behavior a user can reach at run time,
   say that you ran the built or running app and exercised the changed path.
+  This is in addition to any screenshot, recording, or measurement the change
+  needs, never instead of one: a screenshot shows what a surface looks like,
+  a live run says a person reached it in a running build.
   Name the runtime you used (web, desktop, VS Code, hosted mobile, or Capacitor
   mobile), the operating system, and what you saw. Reading the diff, passing
   types, and green CI are not a live run. If you genuinely cannot run it, say

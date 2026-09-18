@@ -36,7 +36,7 @@
 |---|---|
 |  |  |
 
-**Live run:** <!-- Did you run the built or running app and exercise the changed path? Name the runtime (web / desktop / VS Code / hosted mobile / Capacitor mobile), the OS, and what you saw. Not required when no user-reachable behavior changes. If you could not run it, say so and why. -->
+**Live run:** <!-- Did you run the built or running app and exercise the changed path? Name the runtime (web / desktop / VS Code / hosted mobile / Capacitor mobile), the OS, and what you saw. Required in addition to any screenshot or recording below, not instead of one. Not required when no user-reachable behavior changes. If you could not run it, say so and why. -->
 
 ## Visual evidence
 
