@@ -11,6 +11,8 @@ Read `packages/electron/README.md` and nearby `packages/electron` code before ed
 
 Load `ui-api-decoupling` when a native change adds or alters a renderer-facing capability, `RuntimeAPIs`, runtime auth/URL behavior, or shared bridge contract. This skill owns the Electron privilege boundary; `ui-api-decoupling` owns the shared UI/runtime contract.
 
+Before editing behavior a user can reach, write the surface list from `ui-api-decoupling`, *Name The Surfaces Before Editing*: one line per runtime, including the ones this change appears to leave alone. A native-looking change is the usual place this gets skipped: a shutdown order, an updater handoff, or a window lifecycle reads as desktop-only while the sequence around it is shared, and the platform guard that is correct on its own becomes a trap when the rest of the sequence does not account for it.
+
 ## Runtime Boundary
 
 - Electron boots `@openchamber/web` in the same Node process and loads the UI over loopback. Do not introduce a sidecar server process.

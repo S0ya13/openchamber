@@ -161,8 +161,12 @@ Every pull request must explain:
   behavior.
 - **Non-goals:** nearby behavior intentionally left unchanged when the scope
   could otherwise be ambiguous.
-- **Affected surfaces:** packages, runtimes, persisted/external contracts, and
-  user-visible states affected by the change.
+- **Affected surfaces:** packages, persisted/external contracts, and
+  user-visible states affected by the change, plus one line per runtime (web,
+  desktop, VS Code, hosted mobile, Capacitor mobile) saying what the change
+  does there. "Not applicable" is an answer; a blank row is not. Write that
+  list while deciding what to build, not after: it is the same list the pull
+  request template asks for.
 - **Repository guidance:** the skills and owning documentation that were
   applicable, why they applied, and how the implementation satisfies their
   important constraints.

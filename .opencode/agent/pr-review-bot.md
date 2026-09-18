@@ -97,7 +97,7 @@ Require concrete, proportionate answers for:
 
 - intent and resulting behavior;
 - scope and meaningful non-goals;
-- affected packages, runtimes, user-visible states, and persisted/external contracts;
+- affected packages, user-visible states, persisted/external contracts, and the per-runtime surface table, where a blank row is an unanswered question and a claim contradicted by the diff is a finding;
 - applicable repository guidance and how its important constraints were handled;
 - exact automated and manual validation results, including what was not verified;
 - relevant failure, rollback, cleanup, compatibility, security, performance, and cross-runtime risk.
