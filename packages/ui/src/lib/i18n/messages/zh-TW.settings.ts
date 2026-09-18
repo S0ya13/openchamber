@@ -2299,7 +2299,7 @@ export const settingsDict = {
   'settings.commands.page.field.subagentTooltip': '指令會在背景子工作階段中執行，而非目前的工作階段。',
   'settings.common.legacyFormat.note': '此檔案仍使用 OpenCode 1 格式，下次儲存會改寫為 OpenCode 2 格式。',
   'settings.mcp.page.advanced.codemode': 'Code Mode',
-  'settings.mcp.page.advanced.codemodeHint': '以單一程式碼執行工具公開此伺服器的工具，而非逐一公開。',
+  'settings.mcp.page.advanced.codemodeHint': '通常，MCP 伺服器的每個工具都會成為模型個別看到並逐一呼叫的工具。開啟 Code Mode 後，模型只會拿到一個執行短腳本的工具，腳本再把此伺服器的工具當成函式來呼叫。這樣工具很多時上下文也不會膨脹，而且多次呼叫可以在一步內完成。較小的模型撰寫這類腳本較不穩定，因此可以針對伺服器個別關閉。',
   'settings.mcp.page.advanced.timeoutStartupMs': '啟動逾時（毫秒）',
   'settings.mcp.page.advanced.timeoutStartupHint': '等待伺服器程序啟動的時間。',
   'settings.mcp.page.advanced.timeoutCatalogMs': '目錄逾時（毫秒）',

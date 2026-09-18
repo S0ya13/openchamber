@@ -2299,7 +2299,7 @@ export const settingsDict = {
   'settings.commands.page.field.subagentTooltip': '現在のセッションではなく、バックグラウンドの子セッションでコマンドを実行します。',
   'settings.common.legacyFormat.note': 'このファイルはまだ OpenCode 1 形式です。次回の保存で OpenCode 2 形式に書き換えられます。',
   'settings.mcp.page.advanced.codemode': 'Code Mode',
-  'settings.mcp.page.advanced.codemodeHint': 'このサーバーのツールを個別に公開せず、1 つのコード実行ツールとして公開します。',
+  'settings.mcp.page.advanced.codemodeHint': '通常、MCP サーバーの各ツールは個別のツールとしてモデルに公開され、1 つずつ呼び出されます。Code Mode ではモデルに短いスクリプトを実行する 1 つのツールだけが渡され、そのスクリプトからこのサーバーのツールを関数として呼び出します。ツールが多いサーバーでもコンテキストが膨らまず、複数の呼び出しを 1 ステップで行えます。小さなモデルはこうしたスクリプトを書くのが不得手なことがあるため、サーバーごとに無効にできます。',
   'settings.mcp.page.advanced.timeoutStartupMs': '起動タイムアウト（ミリ秒）',
   'settings.mcp.page.advanced.timeoutStartupHint': 'サーバープロセスの起動を待つ時間です。',
   'settings.mcp.page.advanced.timeoutCatalogMs': 'カタログタイムアウト（ミリ秒）',

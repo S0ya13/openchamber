@@ -2299,7 +2299,7 @@ export const settingsDict = {
   'settings.commands.page.field.subagentTooltip': 'El comando se ejecuta en una sesión hija en segundo plano en vez de en la actual.',
   'settings.common.legacyFormat.note': 'Este archivo todavía usa el formato de OpenCode 1. El próximo guardado lo reescribirá como OpenCode 2.',
   'settings.mcp.page.advanced.codemode': 'Code Mode',
-  'settings.mcp.page.advanced.codemodeHint': 'Exponer las herramientas de este servidor mediante una sola herramienta de código en lugar de una por cada función.',
+  'settings.mcp.page.advanced.codemodeHint': 'Normalmente cada herramienta de un servidor MCP se convierte en una herramienta aparte que el modelo ve y llama de una en una. Con Code Mode el modelo recibe una sola herramienta que ejecuta un script corto, y ese script llama a las herramientas de este servidor como funciones. Así el contexto no crece cuando un servidor tiene muchas herramientas y varias llamadas caben en un solo paso. Los modelos más pequeños escriben esos scripts con menos fiabilidad, por eso se puede desactivar por servidor.',
   'settings.mcp.page.advanced.timeoutStartupMs': 'Tiempo de arranque (ms)',
   'settings.mcp.page.advanced.timeoutStartupHint': 'Cuánto esperar a que arranque el proceso del servidor.',
   'settings.mcp.page.advanced.timeoutCatalogMs': 'Tiempo de catálogo (ms)',

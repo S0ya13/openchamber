@@ -1527,7 +1527,7 @@ export const McpPage: React.FC = () => {
                         requestSave();
                       }}
                       label={t('settings.mcp.page.advanced.codemode')}
-                      description={t('settings.mcp.page.advanced.codemodeHint')}
+                      info={t('settings.mcp.page.advanced.codemodeHint')}
                       ariaLabel={t('settings.mcp.page.advanced.codemode')}
                     />
 

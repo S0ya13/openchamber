@@ -2289,7 +2289,7 @@ export const settingsDict = {
   'settings.commands.page.field.subagentTooltip': 'The command runs in a background child session instead of the current one.',
   'settings.common.legacyFormat.note': 'This file still uses the OpenCode 1 format. The next save rewrites it as OpenCode 2.',
   'settings.mcp.page.advanced.codemode': 'Code Mode',
-  'settings.mcp.page.advanced.codemodeHint': 'Expose this server\'s tools through one code-running tool instead of one tool each.',
+  'settings.mcp.page.advanced.codemodeHint': 'Normally every tool an MCP server offers becomes a separate tool the model sees and calls one at a time. With Code Mode the model gets one tool that runs a short script, and the script calls this server\'s tools as functions. That keeps the context small when a server has many tools and lets several calls happen in one step. Smaller models write such scripts less reliably, so it can be turned off per server.',
   'settings.mcp.page.advanced.timeoutStartupMs': 'Startup timeout (ms)',
   'settings.mcp.page.advanced.timeoutStartupHint': 'How long to wait for the server process to start.',
   'settings.mcp.page.advanced.timeoutCatalogMs': 'Catalog timeout (ms)',

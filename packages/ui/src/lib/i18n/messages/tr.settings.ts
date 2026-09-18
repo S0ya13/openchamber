@@ -2287,7 +2287,7 @@ export const settingsDict = {
   'settings.commands.page.field.subagentTooltip': 'Komut geçerli oturum yerine arka planda bir alt oturumda çalışır.',
   'settings.common.legacyFormat.note': 'Bu dosya hâlâ OpenCode 1 biçimini kullanıyor. Sonraki kayıt onu OpenCode 2 olarak yeniden yazacak.',
   'settings.mcp.page.advanced.codemode': 'Code Mode',
-  'settings.mcp.page.advanced.codemodeHint': 'Bu sunucunun araçlarını tek tek yerine tek bir kod çalıştırma aracı üzerinden sunar.',
+  'settings.mcp.page.advanced.codemodeHint': 'Normalde bir MCP sunucusunun her aracı, modelin gördüğü ve tek tek çağırdığı ayrı bir araç olur. Code Mode\'da model kısa bir betik çalıştıran tek bir araç alır ve bu betik, sunucunun araçlarını fonksiyon gibi çağırır. Böylece çok aracı olan sunucularda bağlam şişmez ve birkaç çağrı tek adımda yapılabilir. Küçük modeller bu betikleri daha az güvenilir yazdığından sunucu bazında kapatılabilir.',
   'settings.mcp.page.advanced.timeoutStartupMs': 'Başlatma zaman aşımı (ms)',
   'settings.mcp.page.advanced.timeoutStartupHint': 'Sunucu sürecinin başlaması için beklenecek süre.',
   'settings.mcp.page.advanced.timeoutCatalogMs': 'Katalog zaman aşımı (ms)',

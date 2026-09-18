@@ -2299,7 +2299,7 @@ export const settingsDict = {
   'settings.commands.page.field.subagentTooltip': 'Команда виконується у фоновій дочірній сесії, а не в поточній.',
   'settings.common.legacyFormat.note': 'Цей файл ще у форматі OpenCode 1. Наступне збереження перезапише його у форматі OpenCode 2.',
   'settings.mcp.page.advanced.codemode': 'Code Mode',
-  'settings.mcp.page.advanced.codemodeHint': 'Показувати інструменти цього сервера через один інструмент виконання коду, а не кожен окремо.',
+  'settings.mcp.page.advanced.codemodeHint': 'Зазвичай кожен інструмент MCP-сервера стає окремим інструментом, який модель бачить і викликає по одному. У Code Mode модель отримує один інструмент, що виконує короткий скрипт, а скрипт викликає інструменти цього сервера як функції. Це не роздуває контекст, коли інструментів багато, і дозволяє зробити кілька викликів за один крок. Слабші моделі пишуть такі скрипти менш надійно, тому режим можна вимкнути для окремого сервера.',
   'settings.mcp.page.advanced.timeoutStartupMs': 'Тайм-аут запуску (мс)',
   'settings.mcp.page.advanced.timeoutStartupHint': 'Скільки чекати на запуск процесу сервера.',
   'settings.mcp.page.advanced.timeoutCatalogMs': 'Тайм-аут каталогу (мс)',

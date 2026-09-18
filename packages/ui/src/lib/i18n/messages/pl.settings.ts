@@ -2300,7 +2300,7 @@ export const settingsDict = {
   'settings.commands.page.field.subagentTooltip': 'Polecenie działa w tle w sesji podrzędnej zamiast w bieżącej.',
   'settings.common.legacyFormat.note': 'Ten plik nadal używa formatu OpenCode 1. Następny zapis przepisze go jako OpenCode 2.',
   'settings.mcp.page.advanced.codemode': 'Code Mode',
-  'settings.mcp.page.advanced.codemodeHint': 'Udostępnij narzędzia tego serwera przez jedno narzędzie uruchamiające kod zamiast osobno.',
+  'settings.mcp.page.advanced.codemodeHint': 'Zwykle każde narzędzie serwera MCP staje się osobnym narzędziem, które model widzi i wywołuje pojedynczo. W Code Mode model dostaje jedno narzędzie uruchamiające krótki skrypt, a ten skrypt wywołuje narzędzia tego serwera jak funkcje. Dzięki temu kontekst nie rośnie, gdy serwer ma wiele narzędzi, a kilka wywołań mieści się w jednym kroku. Mniejsze modele piszą takie skrypty mniej niezawodnie, dlatego można to wyłączyć dla wybranego serwera.',
   'settings.mcp.page.advanced.timeoutStartupMs': 'Limit startu (ms)',
   'settings.mcp.page.advanced.timeoutStartupHint': 'Jak długo czekać na uruchomienie procesu serwera.',
   'settings.mcp.page.advanced.timeoutCatalogMs': 'Limit katalogu (ms)',

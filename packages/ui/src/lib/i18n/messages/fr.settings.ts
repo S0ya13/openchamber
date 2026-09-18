@@ -2299,7 +2299,7 @@ export const settingsDict = {
   'settings.commands.page.field.subagentTooltip': 'La commande s\'exécute dans une session enfant en arrière-plan plutôt que dans la session actuelle.',
   'settings.common.legacyFormat.note': 'Ce fichier utilise encore le format OpenCode 1. Le prochain enregistrement le réécrira en OpenCode 2.',
   'settings.mcp.page.advanced.codemode': 'Code Mode',
-  'settings.mcp.page.advanced.codemodeHint': 'Exposer les outils de ce serveur via un seul outil d\'exécution de code plutôt qu\'un outil par fonction.',
+  'settings.mcp.page.advanced.codemodeHint': 'Normalement, chaque outil d\'un serveur MCP devient un outil distinct que le modèle voit et appelle un par un. Avec Code Mode, le modèle reçoit un seul outil qui exécute un court script, et ce script appelle les outils de ce serveur comme des fonctions. Le contexte reste ainsi léger quand un serveur a beaucoup d\'outils, et plusieurs appels tiennent en une seule étape. Les petits modèles écrivent ces scripts de façon moins fiable, d\'où la possibilité de le désactiver par serveur.',
   'settings.mcp.page.advanced.timeoutStartupMs': 'Délai de démarrage (ms)',
   'settings.mcp.page.advanced.timeoutStartupHint': 'Temps d\'attente pour le démarrage du processus serveur.',
   'settings.mcp.page.advanced.timeoutCatalogMs': 'Délai de catalogue (ms)',

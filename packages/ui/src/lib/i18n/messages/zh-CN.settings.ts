@@ -2299,7 +2299,7 @@ export const settingsDict = {
   'settings.commands.page.field.subagentTooltip': '命令在后台子会话中运行，而不是当前会话。',
   'settings.common.legacyFormat.note': '该文件仍使用 OpenCode 1 格式，下次保存会重写为 OpenCode 2 格式。',
   'settings.mcp.page.advanced.codemode': 'Code Mode',
-  'settings.mcp.page.advanced.codemodeHint': '通过一个代码执行工具暴露该服务器的工具，而不是逐个暴露。',
+  'settings.mcp.page.advanced.codemodeHint': '通常，MCP 服务器的每个工具都会成为模型单独看到并逐个调用的工具。开启 Code Mode 后，模型只会得到一个执行短脚本的工具，脚本再把该服务器的工具当作函数来调用。这样工具很多时上下文也不会膨胀，而且多次调用可以在一步内完成。较小的模型编写这类脚本不够稳定，因此可以按服务器单独关闭。',
   'settings.mcp.page.advanced.timeoutStartupMs': '启动超时（毫秒）',
   'settings.mcp.page.advanced.timeoutStartupHint': '等待服务器进程启动的时长。',
   'settings.mcp.page.advanced.timeoutCatalogMs': '目录超时（毫秒）',

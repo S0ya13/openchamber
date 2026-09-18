@@ -2299,7 +2299,7 @@ export const settingsDict = {
   'settings.commands.page.field.subagentTooltip': '현재 세션 대신 백그라운드 하위 세션에서 명령을 실행합니다.',
   'settings.common.legacyFormat.note': '이 파일은 아직 OpenCode 1 형식입니다. 다음 저장 시 OpenCode 2 형식으로 다시 작성됩니다.',
   'settings.mcp.page.advanced.codemode': 'Code Mode',
-  'settings.mcp.page.advanced.codemodeHint': '이 서버의 도구를 개별 도구 대신 하나의 코드 실행 도구로 노출합니다.',
+  'settings.mcp.page.advanced.codemodeHint': '보통 MCP 서버의 각 도구는 모델이 보고 하나씩 호출하는 별도의 도구가 됩니다. Code Mode에서는 모델이 짧은 스크립트를 실행하는 도구 하나만 받고, 그 스크립트가 이 서버의 도구를 함수처럼 호출합니다. 도구가 많은 서버에서도 컨텍스트가 커지지 않고 여러 호출을 한 단계에 처리할 수 있습니다. 작은 모델은 이런 스크립트를 덜 안정적으로 작성하므로 서버별로 끌 수 있습니다.',
   'settings.mcp.page.advanced.timeoutStartupMs': '시작 제한 시간(ms)',
   'settings.mcp.page.advanced.timeoutStartupHint': '서버 프로세스가 시작될 때까지 기다리는 시간입니다.',
   'settings.mcp.page.advanced.timeoutCatalogMs': '카탈로그 제한 시간(ms)',
