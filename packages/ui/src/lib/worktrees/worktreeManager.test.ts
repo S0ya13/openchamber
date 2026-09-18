@@ -5,7 +5,12 @@ import type { WorktreeMetadata } from '@/types/worktree';
 const originalWindow = Object.getOwnPropertyDescriptor(globalThis, 'window');
 beforeEach(() => {
   const values = new Map<string, string>();
-  Object.defineProperty(globalThis, 'window', { configurable: true, value: { sessionStorage: {
+  const events = new EventTarget();
+  Object.defineProperty(globalThis, 'window', { configurable: true, value: {
+    addEventListener: events.addEventListener.bind(events),
+    removeEventListener: events.removeEventListener.bind(events),
+    dispatchEvent: events.dispatchEvent.bind(events),
+    sessionStorage: {
     getItem: (key: string) => values.get(key) ?? null,
     setItem: (key: string, value: string) => { values.set(key, value); },
   } } });

@@ -45,7 +45,9 @@ import { useGitBaseBranchStore } from '@/stores/useGitBaseBranchStore';
 import { FileTypeIcon } from '@/components/icons/FileTypeIcon';
 import { fileDiffFromPatch, isBinaryPatch } from '@/lib/diff/patchFileDiff';
 import type { FileDiffMetadata } from '@pierre/diffs';
-import type { GitStatus } from '@/lib/api/types';
+import type { GitStatus, GitSubmoduleState } from '@/lib/api/types';
+import { GitPathUnavailableError } from '@/lib/api/git-path-diff';
+import { SubmoduleDiffSummary } from '@/components/views/SubmoduleDiffSummary';
 import { useI18n } from '@/lib/i18n';
 import { generateCommitMessage, stageGitFile, stageGitFiles, unstageGitFile, unstageGitFiles } from '@/lib/gitApi';
 import type { GitRemote } from '@/lib/gitApi';
@@ -87,6 +89,7 @@ interface MobileDiffData {
   modified: string;
   isBinary?: boolean;
   fileDiff?: FileDiffMetadata;
+  submodule?: GitSubmoduleState | null;
 }
 type ComparisonDiff =
   | { status: 'loading' }
@@ -256,6 +259,9 @@ export const MobileChangesPane: React.FC<MobileChangesPaneProps> = ({ rootDirect
   const [visibleChangePaths, setVisibleChangePaths] = React.useState<string[]>([]);
   const [remotes, setRemotes] = React.useState<GitRemote[]>([]);
   const [diffLoadError, setDiffLoadError] = React.useState<string | null>(null);
+  // The route path whose diff the server declined for a reason the detail
+  // view explains instead of showing an error.
+  const [unavailablePath, setUnavailablePath] = React.useState<{ key: string; reason: 'nested_repository' | 'untracked_directory' } | null>(null);
   const [diffRetryNonce, setDiffRetryNonce] = React.useState(0);
   const contributorDestination = useContributorDestinationChooser();
   const publishChooser = useGitPublishChooser({ directory: currentDirectory, branch: status?.current, chooseContributor: contributorDestination.choose });
@@ -451,6 +457,9 @@ export const MobileChangesPane: React.FC<MobileChangesPaneProps> = ({ rootDirect
       return;
     }
     const cacheKey = diffCacheKey(route.path, route.staged);
+    // A path reported as a nested repository by an earlier read may be diffable
+    // now; each read decides again.
+    setUnavailablePath(null);
     if (!currentDirectory || getDiff(currentDirectory, cacheKey)) {
       setDiffLoadError(null);
       return;
@@ -466,17 +475,27 @@ export const MobileChangesPane: React.FC<MobileChangesPaneProps> = ({ rootDirect
           original: response.original ?? '',
           modified: response.modified ?? '',
           isBinary: response.isBinary,
+          submodule: response.submodule,
         }, runtimeKey);
       })
       .catch((error) => {
         if (cancelled) return;
+        if (error instanceof GitPathUnavailableError && error.reason !== 'path_not_found') {
+          setUnavailablePath({ key: `${currentDirectory}\u0000${route.path}`, reason: error.reason });
+          return;
+        }
+        if (error instanceof GitPathUnavailableError) {
+          // A vanished file drops out of the refreshed list, which the detail
+          // view reports as no longer changed. Until then, keep Retry available.
+          void fetchStatus(currentDirectory, git, { force: true, silent: true });
+        }
         setDiffLoadError(error instanceof Error ? error.message : String(error));
       });
 
     return () => {
       cancelled = true;
     };
-  }, [currentDirectory, diffRetryNonce, getDiff, git, route, setDiff, visible]);
+  }, [currentDirectory, diffRetryNonce, fetchStatus, getDiff, git, route, setDiff, visible]);
 
   const handleSyncAction = async (action: Exclude<SyncAction, null>, remote?: GitRemote, forceChoose = false) => {
     if (!currentDirectory) return;
@@ -713,6 +732,7 @@ export const MobileChangesPane: React.FC<MobileChangesPaneProps> = ({ rootDirect
         id: 'staged',
         title: t('gitView.changes.stagedTitle'),
         entries: stagedChangeEntries,
+        statsScope: 'staged',
         actionSymbol: '-',
         actionAllLabel: t('gitView.changes.unstageAllAria'),
         getActionLabel: (path: string) => t('gitView.changes.unstageFileAria', { path }),
@@ -730,6 +750,7 @@ export const MobileChangesPane: React.FC<MobileChangesPaneProps> = ({ rootDirect
         id: 'unstaged',
         title: t('gitView.changes.title'),
         entries: unstagedChangeEntries,
+        statsScope: 'working',
         actionSymbol: '+',
         actionAllLabel: t('gitView.changes.stageAllAria'),
         getActionLabel: (path: string) => t('gitView.changes.stageFileAria', { path }),
@@ -757,7 +778,7 @@ export const MobileChangesPane: React.FC<MobileChangesPaneProps> = ({ rootDirect
         {onClose ? (
           <button
             type="button"
-            className="-ml-1 flex size-10 shrink-0 items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-interactive-hover hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+            className="-ml-1 flex size-10 shrink-0 items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-interactive-hover hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
             aria-label={t('mobile.surface.closeAria')}
             onClick={onClose}
             style={{ touchAction: 'manipulation' }}
@@ -815,7 +836,9 @@ export const MobileChangesPane: React.FC<MobileChangesPaneProps> = ({ rootDirect
       <MobileDiffDetail
         path={route.path}
         diff={selectedDiff}
+        staged={route.staged}
         fileExists={Boolean(selectedFileEntry)}
+        unavailableReason={unavailablePath?.key === `${currentDirectory}\u0000${route.path}` ? unavailablePath.reason : null}
         error={diffLoadError}
         onBack={() => setRoute({ type: 'list' })}
         onRetry={() => setDiffRetryNonce((value) => value + 1)}
@@ -888,7 +911,7 @@ export const MobileChangesPane: React.FC<MobileChangesPaneProps> = ({ rootDirect
         {onClose ? (
           <button
             type="button"
-            className="-ml-1 flex size-10 shrink-0 items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-interactive-hover hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+            className="-ml-1 flex size-10 shrink-0 items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-interactive-hover hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
             aria-label={t('mobile.surface.closeAria')}
             onClick={onClose}
             style={{ touchAction: 'manipulation' }}
@@ -1110,11 +1133,13 @@ const MobileDiffDetail: React.FC<{
   path: string;
   subtitle?: string;
   diff: MobileDiffData | null;
+  staged?: boolean;
   fileExists: boolean;
+  unavailableReason?: 'nested_repository' | 'untracked_directory' | null;
   error: string | null;
   onBack: () => void;
   onRetry: () => void;
-}> = ({ path, subtitle, diff, fileExists, error, onBack, onRetry }) => {
+}> = ({ path, subtitle, diff, staged = false, fileExists, unavailableReason = null, error, onBack, onRetry }) => {
   const { t } = useI18n();
   const language = React.useMemo(() => getLanguageFromExtension(path) || 'text', [path]);
 
@@ -1123,7 +1148,7 @@ const MobileDiffDetail: React.FC<{
       <header className="flex h-[var(--oc-header-height,56px)] shrink-0 items-center gap-3 border-b border-border/70 px-3 text-foreground">
         <button
           type="button"
-          className="flex size-9 shrink-0 items-center justify-center rounded-lg text-muted-foreground hover:bg-interactive-hover hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+          className="flex size-9 shrink-0 items-center justify-center rounded-lg text-muted-foreground hover:bg-interactive-hover hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
           aria-label={t('header.actions.backAria')}
           onClick={onBack}
         >
@@ -1137,6 +1162,10 @@ const MobileDiffDetail: React.FC<{
       <div className="min-h-0 flex-1 overflow-hidden">
         {!fileExists ? (
           <MobileChangesState icon message={t('mobile.changes.diffDetail.missingTitle')} description={t('mobile.changes.diffDetail.missingDescription')} />
+        ) : unavailableReason === 'nested_repository' ? (
+          <MobileChangesState icon message={t('diffView.unavailable.nestedRepositoryTitle')} description={t('diffView.unavailable.nestedRepositoryDescription')} />
+        ) : unavailableReason === 'untracked_directory' ? (
+          <MobileChangesState icon message={t('diffView.unavailable.untrackedDirectoryTitle')} description={t('diffView.unavailable.untrackedDirectoryDescription')} />
         ) : error ? (
           <div className="flex h-full items-center justify-center px-6 text-center">
             <div className="flex max-w-sm flex-col items-center gap-3">
@@ -1147,6 +1176,8 @@ const MobileDiffDetail: React.FC<{
           </div>
         ) : !diff ? (
           <MobileChangesState loading message={t('diffView.state.loadingDiff')} />
+        ) : diff.submodule ? (
+          <div className="p-3"><SubmoduleDiffSummary state={diff.submodule} staged={staged} /></div>
         ) : diff.isBinary ? (
           <MobileChangesState icon message={t('diffView.binary.unavailable')} />
         ) : isImageFile(path) && !diff.fileDiff ? (

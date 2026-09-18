@@ -3,14 +3,16 @@
  * Uses bridge messages to communicate with the extension host
  */
 
+import { z } from 'zod';
 import { sendBridgeMessage } from './bridge';
 import { GitNetworkOperationRequestError } from '@openchamber/ui/lib/api/types';
 import { gitIdentityProfilesSchema } from '@openchamber/ui/lib/api/git-identity';
 import { readRepositoryRemotes } from './git-remotes';
+import { GitPathUnavailableError, gitSubmoduleStateSchema } from '@openchamber/ui/lib/api/git-path-diff';
 import type {
   GitAPI,
   GitStatus,
-  GitDiffResponse,
+  GitPathDiffResponse,
   GetGitDiffOptions,
   GitFileDiffResponse,
   GetGitFileDiffOptions,
@@ -309,6 +311,22 @@ const runCompatibilityOperation = async (entry: CompatibilityOperation): Promise
   };
 };
 
+// The extension host answers diff requests with an explicit result; see
+// `src/gitPathDiff.ts`.
+const unavailablePathSchema = z.object({
+  kind: z.literal('unavailable'),
+  reason: z.enum(['path_not_found', 'nested_repository']),
+  message: z.string(),
+});
+const pathDiffBridgeSchema = z.discriminatedUnion('kind', [
+  z.object({ kind: z.literal('diff'), diff: z.string(), submodule: gitSubmoduleStateSchema.nullable() }),
+  unavailablePathSchema,
+]);
+const fileDiffBridgeSchema = z.discriminatedUnion('kind', [
+  z.object({ kind: z.literal('file-diff'), original: z.string(), modified: z.string(), path: z.string(), submodule: gitSubmoduleStateSchema.nullable() }),
+  unavailablePathSchema,
+]);
+
 export const createVSCodeGitAPI = (): GitAPI => ({
   checkIsGitRepository: async (directory: string): Promise<boolean> => {
     return sendBridgeMessage<boolean>('api:git/check', { directory });
@@ -318,21 +336,25 @@ export const createVSCodeGitAPI = (): GitAPI => ({
     return sendBridgeMessage<GitStatus>('api:git/status', { directory, mode: options?.mode });
   },
 
-  getGitDiff: async (directory: string, options: GetGitDiffOptions): Promise<GitDiffResponse> => {
-    return sendBridgeMessage<GitDiffResponse>('api:git/diff', {
+  getGitDiff: async (directory: string, options: GetGitDiffOptions): Promise<GitPathDiffResponse> => {
+    const result = pathDiffBridgeSchema.parse(await sendBridgeMessage<unknown>('api:git/diff', {
       directory,
       path: options.path,
       staged: options.staged,
       contextLines: options.contextLines,
-    });
+    }));
+    if (result.kind === 'unavailable') throw new GitPathUnavailableError(result.message, result.reason);
+    return { diff: result.diff, submodule: result.submodule };
   },
 
   getGitFileDiff: async (directory: string, options: GetGitFileDiffOptions): Promise<GitFileDiffResponse> => {
-    return sendBridgeMessage<GitFileDiffResponse>('api:git/file-diff', {
+    const result = fileDiffBridgeSchema.parse(await sendBridgeMessage<unknown>('api:git/file-diff', {
       directory,
       path: options.path,
       staged: options.staged,
-    });
+    }));
+    if (result.kind === 'unavailable') throw new GitPathUnavailableError(result.message, result.reason);
+    return { original: result.original, modified: result.modified, path: result.path, submodule: result.submodule };
   },
 
   revertGitFile: async (directory: string, filePath: string, options?: { scope?: 'all' | 'working' }): Promise<void> => {

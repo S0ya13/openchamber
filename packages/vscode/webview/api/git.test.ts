@@ -226,3 +226,31 @@ describe('createVSCodeGitAPI author profiles and remotes', () => {
     ]);
   });
 });
+
+test('diff answers from the extension host become the shared contract, and unavailable paths become typed errors', async () => {
+    messages.length = 0;
+    const { GitPathUnavailableError } = await import('@openchamber/ui/lib/api/git-path-diff');
+    const git = createVSCodeGitAPI();
+    const submodule = { headCommit: 'a'.repeat(40), indexCommit: 'a'.repeat(40), worktreeCommit: 'b'.repeat(40), hasTrackedChanges: false, hasUntrackedFiles: false, hasConflict: false };
+
+    const diff = git.getGitDiff('/repo', { path: 'sub' });
+    respond(await nextMessage(), { kind: 'diff', diff: 'patch', submodule });
+    assert.deepEqual(await diff, { diff: 'patch', submodule });
+
+    const fileDiff = git.getGitFileDiff('/repo', { path: 'file.ts' });
+    respond(await nextMessage(), { kind: 'file-diff', original: 'a', modified: 'b', path: 'file.ts', submodule: null });
+    assert.deepEqual(await fileDiff, { original: 'a', modified: 'b', path: 'file.ts', submodule: null });
+
+    const nested = assert.rejects(git.getGitDiff('/repo', { path: 'nested/' }), (error) => error instanceof GitPathUnavailableError && error.reason === 'nested_repository');
+    respond(await nextMessage(), { kind: 'unavailable', reason: 'nested_repository', message: 'Path is a separate Git repository: nested/' });
+    await nested;
+
+    const missing = assert.rejects(git.getGitFileDiff('/repo', { path: 'gone.txt' }), (error) => error instanceof GitPathUnavailableError && error.reason === 'path_not_found');
+    respond(await nextMessage(), { kind: 'unavailable', reason: 'path_not_found', message: 'Path not found in working tree, index, or HEAD: gone.txt' });
+    await missing;
+
+    // An old extension host answering the bare `{ diff }` shape is a contract break, not an empty diff.
+    const invalid = assert.rejects(git.getGitDiff('/repo', { path: 'file.ts' }));
+    respond(await nextMessage(), { diff: '' });
+    await invalid;
+});
