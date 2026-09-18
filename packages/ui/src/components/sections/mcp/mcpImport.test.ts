@@ -62,7 +62,8 @@ describe('parseImportedMcpSnippet', () => {
             disabled: true,
             codemode: true,
             timeout: { catalog: 30000, execution: 45000 },
-            oauth: { client_id: 'id', client_secret: 'secret', scope: 'all', callback_port: 4242 },
+            protocol: 'auto',
+            oauth: { client_id: 'id', client_secret: 'secret', scope: 'all', callback_port: 4242, auth_server_metadata_url: 'https://auth.example/.well-known/oauth-authorization-server' },
           },
         },
       },
@@ -79,6 +80,8 @@ describe('parseImportedMcpSnippet', () => {
     expect(result.oauthClientId).toBe('id');
     expect(result.oauthClientSecret).toBe('secret');
     expect(result.oauthCallbackPort).toBe('4242');
+    expect(result.oauthAuthServerMetadataUrl).toBe('https://auth.example/.well-known/oauth-authorization-server');
+    expect(result.protocol).toBe('auto');
   });
 
   test('a local v2 server keeps its startup timeout', () => {

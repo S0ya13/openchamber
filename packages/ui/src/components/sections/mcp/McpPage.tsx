@@ -7,7 +7,10 @@ import {
   selectMcpServersForDirectory,
   useMcpConfigStore,
   envRecordToArray,
+  MCP_PROTOCOLS,
   type McpDraft,
+  type McpOAuthConfig,
+  type McpProtocol,
   type McpScope,
 } from '@/stores/useMcpConfigStore';
 import { useShallow } from 'zustand/react/shallow';
@@ -74,9 +77,9 @@ const formatDuration = (value: string): string | null => {
 };
 
 /**
- * OpenCode v2 has no MCP OAuth flow in the UI, so the page never sets these.
- * They stay on the draft because a pasted config may carry them and the store
- * writes them back untouched.
+ * The OAuth credential fields the page has no editor for. A save rebuilds the
+ * whole `oauth` object, so whatever the entry already holds is carried in this
+ * shape and written back untouched.
  */
 export const MCP_DRAFT_OAUTH_UNSET = {
   oauthEnabled: true,
@@ -86,6 +89,45 @@ export const MCP_DRAFT_OAUTH_UNSET = {
   oauthRedirectUri: '',
   oauthCallbackPort: '',
 } as const satisfies Pick<McpDraft, 'oauthEnabled' | 'oauthClientId' | 'oauthClientSecret' | 'oauthScope' | 'oauthRedirectUri' | 'oauthCallbackPort'>;
+
+/** Message keys for the protocol options; the raw values are config spellings. */
+const MCP_PROTOCOL_LABEL_KEYS = {
+  legacy: 'settings.mcp.page.advanced.protocolOption.legacy',
+  auto: 'settings.mcp.page.advanced.protocolOption.auto',
+  '2026-07-28': 'settings.mcp.page.advanced.protocolOption.revision20260728',
+} as const satisfies Record<McpProtocol, string>;
+
+type McpOAuthCarried = Pick<
+  McpDraft,
+  'oauthEnabled' | 'oauthClientId' | 'oauthClientSecret' | 'oauthScope' | 'oauthRedirectUri' | 'oauthCallbackPort'
+>;
+
+/** The stored OAuth block as the form carries it, so a save cannot lose it. */
+const readCarriedOAuth = (oauth: McpOAuthConfig | false | undefined): McpOAuthCarried => {
+  if (oauth === false) return { ...MCP_DRAFT_OAUTH_UNSET, oauthEnabled: false };
+  if (!oauth) return MCP_DRAFT_OAUTH_UNSET;
+  return {
+    oauthEnabled: true,
+    oauthClientId: oauth.client_id ?? '',
+    oauthClientSecret: oauth.client_secret ?? '',
+    oauthScope: oauth.scope ?? '',
+    oauthRedirectUri: oauth.redirect_uri ?? '',
+    oauthCallbackPort: oauth.callback_port === undefined ? '' : String(oauth.callback_port),
+  };
+};
+
+/**
+ * The authorization-server metadata document has to be fetchable, so anything
+ * that is not an absolute http(s) address is rejected before it is saved.
+ */
+const isAbsoluteHttpUrl = (value: string): boolean => {
+  try {
+    const parsed = new URL(value);
+    return parsed.protocol === 'http:' || parsed.protocol === 'https:';
+  } catch {
+    return false;
+  }
+};
 
 /** A v2 MCP server reports its state as a nested discriminated union. */
 const readMcpStatusName = (server: McpServerStatus | undefined): string | undefined => server?.status.status;
@@ -571,6 +613,9 @@ export const McpPage: React.FC = () => {
   const [timeoutCatalog, setTimeoutCatalog] = React.useState('');
   const [timeoutExecution, setTimeoutExecution] = React.useState('');
   const [codemode, setCodemode] = React.useState(false);
+  const [protocol, setProtocol] = React.useState<McpProtocol>('legacy');
+  const [oauthAuthServerMetadataUrl, setOauthAuthServerMetadataUrl] = React.useState('');
+  const [carriedOAuth, setCarriedOAuth] = React.useState<McpOAuthCarried>(MCP_DRAFT_OAUTH_UNSET);
   const [enabled, setEnabled] = React.useState(true);
   const [isCreating, setIsCreating] = React.useState(false);
   const [showDeleteConfirm, setShowDeleteConfirm] = React.useState(false);
@@ -599,6 +644,8 @@ export const McpPage: React.FC = () => {
     timeoutCatalog: string;
     timeoutExecution: string;
     codemode: boolean;
+    protocol: McpProtocol;
+    oauthAuthServerMetadataUrl: string;
     enabled: boolean;
   } | null>(null);
 
@@ -638,6 +685,8 @@ export const McpPage: React.FC = () => {
       timeoutExecution,
       codemode,
       disabled: !enabled,
+      protocol,
+      oauthAuthServerMetadataUrl,
     };
 
     const next = applyImportedMcpToDraft(outcome, partial, { isNewServer });
@@ -654,6 +703,8 @@ export const McpPage: React.FC = () => {
     setTimeoutExecution(next.timeoutExecution ?? '');
     setCodemode(next.codemode ?? false);
     setEnabled(next.disabled !== true);
+    setProtocol(next.protocol ?? 'legacy');
+    setOauthAuthServerMetadataUrl(next.oauthAuthServerMetadataUrl ?? '');
 
     setShowImportDialog(false);
     setImportJsonText('');
@@ -669,6 +720,8 @@ export const McpPage: React.FC = () => {
     url,
     envEntries,
     headerEntries,
+    protocol,
+    oauthAuthServerMetadataUrl,
     timeoutStartup,
     timeoutCatalog,
     timeoutExecution,
@@ -692,6 +745,16 @@ export const McpPage: React.FC = () => {
       setTimeoutCatalog(mcpDraft.timeoutCatalog);
       setTimeoutExecution(mcpDraft.timeoutExecution);
       setCodemode(mcpDraft.codemode);
+      setProtocol(mcpDraft.protocol);
+      setOauthAuthServerMetadataUrl(mcpDraft.oauthAuthServerMetadataUrl);
+      setCarriedOAuth({
+        oauthEnabled: mcpDraft.oauthEnabled,
+        oauthClientId: mcpDraft.oauthClientId,
+        oauthClientSecret: mcpDraft.oauthClientSecret,
+        oauthScope: mcpDraft.oauthScope,
+        oauthRedirectUri: mcpDraft.oauthRedirectUri,
+        oauthCallbackPort: mcpDraft.oauthCallbackPort,
+      });
       setEnabled(!mcpDraft.disabled);
       setIsAdvancedRemoteOptionsOpen(false);
       savedRef.current = {
@@ -703,6 +766,8 @@ export const McpPage: React.FC = () => {
         timeoutCatalog: mcpDraft.timeoutCatalog,
         timeoutExecution: mcpDraft.timeoutExecution,
         codemode: mcpDraft.codemode,
+        protocol: mcpDraft.protocol,
+        oauthAuthServerMetadataUrl: mcpDraft.oauthAuthServerMetadataUrl,
         enabled: !mcpDraft.disabled,
       };
       return;
@@ -720,6 +785,12 @@ export const McpPage: React.FC = () => {
       const nextCatalog = msField(selectedServer.timeout?.catalog);
       const nextExecution = msField(selectedServer.timeout?.execution);
       const nextCodemode = selectedServer.codemode === true;
+      // An entry without the key is what OpenCode calls `legacy`.
+      const nextProtocol = selectedServer.protocol ?? 'legacy';
+      const nextCarriedOAuth = readCarriedOAuth(remoteServer?.oauth);
+      const nextAuthServerMetadataUrl = remoteServer && remoteServer.oauth
+        ? remoteServer.oauth.auth_server_metadata_url ?? ''
+        : '';
       const nextEnabled = selectedServer.disabled !== true;
       const saved = savedRef.current;
       // OpenCode re-reads the config right after our own write, so the store
@@ -732,6 +803,8 @@ export const McpPage: React.FC = () => {
         && saved.timeoutCatalog === nextCatalog
         && saved.timeoutExecution === nextExecution
         && saved.codemode === nextCodemode
+        && saved.protocol === nextProtocol
+        && saved.oauthAuthServerMetadataUrl === nextAuthServerMetadataUrl
         && saved.enabled === nextEnabled
         && JSON.stringify(saved.command) === JSON.stringify(cmd)
         && JSON.stringify(saved.envEntries) === JSON.stringify(envArr)
@@ -747,6 +820,9 @@ export const McpPage: React.FC = () => {
       setTimeoutCatalog(nextCatalog);
       setTimeoutExecution(nextExecution);
       setCodemode(nextCodemode);
+      setProtocol(nextProtocol);
+      setOauthAuthServerMetadataUrl(nextAuthServerMetadataUrl);
+      setCarriedOAuth(nextCarriedOAuth);
       setEnabled(nextEnabled);
       setIsAdvancedRemoteOptionsOpen(false);
       savedRef.current = {
@@ -759,6 +835,8 @@ export const McpPage: React.FC = () => {
         timeoutCatalog: nextCatalog,
         timeoutExecution: nextExecution,
         codemode: nextCodemode,
+        protocol: nextProtocol,
+        oauthAuthServerMetadataUrl: nextAuthServerMetadataUrl,
         enabled: nextEnabled,
       };
     }
@@ -775,11 +853,20 @@ export const McpPage: React.FC = () => {
       JSON.stringify(envEntries) !== JSON.stringify(init.envEntries) ||
       JSON.stringify(headerEntries) !== JSON.stringify(init.headerEntries) ||
       codemode !== init.codemode ||
+      protocol !== init.protocol ||
+      oauthAuthServerMetadataUrl !== init.oauthAuthServerMetadataUrl ||
       timeoutStartup !== init.timeoutStartup ||
       timeoutCatalog !== init.timeoutCatalog ||
       timeoutExecution !== init.timeoutExecution
     );
-  }, [mcpType, command, url, envEntries, headerEntries, codemode, timeoutStartup, timeoutCatalog, timeoutExecution, enabled]);
+  }, [mcpType, command, url, envEntries, headerEntries, codemode, protocol, oauthAuthServerMetadataUrl, timeoutStartup, timeoutCatalog, timeoutExecution, enabled]);
+
+  /** Empty is fine — the field is optional; anything else must be fetchable. */
+  const authServerMetadataUrlError = React.useMemo(() => {
+    const trimmed = oauthAuthServerMetadataUrl.trim();
+    if (!trimmed || isAbsoluteHttpUrl(trimmed)) return null;
+    return t('settings.mcp.page.advanced.oauthMetadataUrlInvalid');
+  }, [oauthAuthServerMetadataUrl, t]);
 
   const advancedSummary = React.useMemo(() => {
     const parts: string[] = [];
@@ -793,8 +880,10 @@ export const McpPage: React.FC = () => {
     const execution = formatDuration(timeoutExecution);
     if (execution) parts.push(t('settings.mcp.page.advanced.summary.execution', { value: execution }));
     if (codemode) parts.push(t('settings.mcp.page.advanced.codemode'));
+    // `legacy` is the default, so naming it here would be noise.
+    if (protocol !== 'legacy') parts.push(t(MCP_PROTOCOL_LABEL_KEYS[protocol]));
     return parts.join(' · ');
-  }, [codemode, headerEntries.length, mcpType, t, timeoutCatalog, timeoutExecution, timeoutStartup]);
+  }, [codemode, headerEntries.length, mcpType, protocol, t, timeoutCatalog, timeoutExecution, timeoutStartup]);
 
   // What the user has is either a command they were given or a link. Which of
   // the two decides the transport, so the page reads it off the text instead of
@@ -829,7 +918,9 @@ export const McpPage: React.FC = () => {
     }
   }, []);
 
-  const buildDraft = (name: string): Omit<McpDraft, keyof typeof MCP_DRAFT_OAUTH_UNSET> => ({
+  // The OAuth credentials the page cannot edit ride along untouched: the store
+  // rebuilds the whole `oauth` block from the draft on every save.
+  const buildDraft = (name: string): McpDraft => ({
     name,
     scope: draftScope,
     type: mcpType,
@@ -837,6 +928,9 @@ export const McpPage: React.FC = () => {
     url,
     environment: envEntries,
     headers: headerEntries,
+    ...carriedOAuth,
+    oauthAuthServerMetadataUrl: mcpType === 'remote' ? oauthAuthServerMetadataUrl : '',
+    protocol,
     timeoutStartup,
     timeoutCatalog,
     timeoutExecution,
@@ -857,6 +951,9 @@ export const McpPage: React.FC = () => {
     if (mcpType === 'remote' && !url.trim()) {
       return autosaveFailed(t('settings.mcp.page.toast.remoteUrlRequired'));
     }
+    if (mcpType === 'remote' && authServerMetadataUrlError) {
+      return autosaveFailed(authServerMetadataUrlError);
+    }
 
     const result = await updateMcp(selectedMcpName, buildDraft(selectedMcpName), currentDirectory);
     if (!result.ok) {
@@ -865,7 +962,9 @@ export const McpPage: React.FC = () => {
 
     savedRef.current = {
       mcpType, command, url, envEntries, headerEntries,
-      timeoutStartup, timeoutCatalog, timeoutExecution, codemode, enabled,
+      timeoutStartup, timeoutCatalog, timeoutExecution, codemode, protocol,
+      oauthAuthServerMetadataUrl: mcpType === 'remote' ? oauthAuthServerMetadataUrl : '',
+      enabled,
     };
     await refreshStatus({ directory: currentDirectory, silent: true });
     if (result.reloadFailed) {
@@ -874,8 +973,9 @@ export const McpPage: React.FC = () => {
     return AUTOSAVE_SAVED;
     // `buildDraft` is rebuilt every render from exactly this state.
   }, [
-    codemode, command, currentDirectory, enabled, envEntries, headerEntries, isDirty, isNewServer,
-    mcpType, refreshStatus, selectedMcpName, t, timeoutCatalog, timeoutExecution, timeoutStartup,
+    authServerMetadataUrlError, carriedOAuth, codemode, command, currentDirectory, draftScope, enabled,
+    envEntries, headerEntries, isDirty, isNewServer, mcpType, oauthAuthServerMetadataUrl, protocol,
+    refreshStatus, selectedMcpName, t, timeoutCatalog, timeoutExecution, timeoutStartup,
     updateMcp, url,
   ]);
 
@@ -894,10 +994,13 @@ export const McpPage: React.FC = () => {
     if (mcpType === 'remote' && !url.trim()) {
       toast.error(t('settings.mcp.page.toast.remoteUrlRequired')); return;
     }
+    if (mcpType === 'remote' && authServerMetadataUrlError) {
+      toast.error(authServerMetadataUrlError); return;
+    }
 
     setIsCreating(true);
     try {
-      const result = await createMcp({ ...buildDraft(name), ...MCP_DRAFT_OAUTH_UNSET }, currentDirectory);
+      const result = await createMcp(buildDraft(name), currentDirectory);
       if (result.ok) {
         setMcpDraft(null);
         setSelectedMcp(name);
@@ -1327,6 +1430,37 @@ export const McpPage: React.FC = () => {
                 </CollapsibleTrigger>
                 <CollapsibleContent className="pt-2">
                   <div className="space-y-4">
+                    <div className="flex flex-col gap-2 @xl:flex-row @xl:items-center @xl:gap-8">
+                      <div className="flex min-w-0 flex-row items-center gap-1 @xl:w-56 shrink-0">
+                        <span className={SETTINGS_FIELD_LABEL_CLASS}>{t('settings.mcp.page.advanced.protocol')}</span>
+                        <SettingsInfoHint>{t('settings.mcp.page.advanced.protocolHint')}</SettingsInfoHint>
+                      </div>
+                      <Select
+                        value={protocol}
+                        onValueChange={(value) => {
+                          const next = MCP_PROTOCOLS.find((option) => option === value);
+                          if (!next) return;
+                          setProtocol(next);
+                          requestSave();
+                        }}
+                      >
+                        <SelectTrigger
+                          size={SETTINGS_SELECT_SIZE}
+                          className="!h-7 w-full max-w-[16rem] px-2"
+                          aria-label={t('settings.mcp.page.advanced.protocol')}
+                        >
+                          <span className="truncate">{t(MCP_PROTOCOL_LABEL_KEYS[protocol])}</span>
+                        </SelectTrigger>
+                        <SelectContent>
+                          {MCP_PROTOCOLS.map((option) => (
+                            <SelectItem key={option} value={option}>
+                              {t(MCP_PROTOCOL_LABEL_KEYS[option])}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+
                     <div className="space-y-2">
                       {mcpType === 'local' && (
                         <div className="flex flex-col gap-2 @xl:flex-row @xl:items-center @xl:gap-8">
@@ -1425,6 +1559,38 @@ export const McpPage: React.FC = () => {
                         plainTextWarning={t('settings.mcp.page.env.plainTextWarning')}
                         removeVariableAria={t('settings.mcp.page.env.removeVariableAria')}
                       />
+                    </div>
+                    )}
+
+                    {mcpType === 'remote' && (
+                    <div>
+                      <SettingsGroupTitle as="div" className="mb-2">
+                        {t('settings.mcp.page.advanced.oauth')}
+                      </SettingsGroupTitle>
+                      <div className="flex flex-col gap-2 @xl:flex-row @xl:items-center @xl:gap-8">
+                        <div className="flex min-w-0 flex-row items-center gap-1 @xl:w-56 shrink-0">
+                          <span className={SETTINGS_FIELD_LABEL_CLASS}>{t('settings.mcp.page.advanced.oauthMetadataUrl')}</span>
+                          <SettingsInfoHint>{t('settings.mcp.page.advanced.oauthMetadataUrlHint')}</SettingsInfoHint>
+                        </div>
+                        <div className="min-w-0 flex-1 space-y-1">
+                          <Input
+                            type="url"
+                            value={oauthAuthServerMetadataUrl}
+                            onChange={(e) => setOauthAuthServerMetadataUrl(e.target.value)}
+                            placeholder={t('settings.mcp.page.advanced.oauthMetadataUrlPlaceholder')}
+                            aria-label={t('settings.mcp.page.advanced.oauthMetadataUrl')}
+                            aria-invalid={authServerMetadataUrlError ? true : undefined}
+                            className="h-7 w-full max-w-[24rem] font-mono typography-meta px-2"
+                            data-bwignore="true"
+                            data-1p-ignore="true"
+                          />
+                          {/* A validation error has to stay readable while the
+                              field is being corrected, so it is not behind the hint. */}
+                          {authServerMetadataUrlError && (
+                            <p className="typography-micro text-[var(--status-error)]">{authServerMetadataUrlError}</p>
+                          )}
+                        </div>
+                      </div>
                     </div>
                     )}
 

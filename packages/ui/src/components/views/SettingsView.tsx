@@ -434,6 +434,8 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ onClose, forceMobile
         oauthScope: '',
         oauthRedirectUri: '',
         oauthCallbackPort: '',
+        oauthAuthServerMetadataUrl: '',
+        protocol: 'legacy',
         timeoutStartup: '',
         timeoutCatalog: '',
         timeoutExecution: '',

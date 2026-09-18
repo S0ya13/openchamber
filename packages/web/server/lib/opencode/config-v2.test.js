@@ -206,6 +206,52 @@ describe('mcp entity', () => {
     });
   });
 
+  it('keeps a non-default protocol on both transports', () => {
+    expect(toMcpEntity({ type: 'local', command: ['a'], protocol: 'auto' }).protocol).toBe('auto');
+    expect(toMcpEntity({
+      type: 'remote',
+      url: 'https://mcp.example.com',
+      protocol: '2026-07-28',
+    }).protocol).toBe('2026-07-28');
+  });
+
+  it('drops the protocol key for legacy, for an unknown value and for a removal', () => {
+    // The editor saves "legacy" as `null`: absent is what OpenCode calls legacy,
+    // so the config file only ever names a non-default negotiation.
+    expect(toMcpEntity({ type: 'local', command: ['a'], protocol: null })).not.toHaveProperty('protocol');
+    expect(toMcpEntity({ type: 'local', command: ['a'], protocol: 'made-up' })).not.toHaveProperty('protocol');
+    expect(toMcpEntity({ type: 'local', command: ['a'], protocol: 'legacy' }).protocol).toBe('legacy');
+  });
+
+  it('keeps auth_server_metadata_url and drops it again when emptied', () => {
+    expect(toMcpEntity({
+      type: 'remote',
+      url: 'https://mcp.example.com',
+      oauth: {
+        client_id: 'id',
+        auth_server_metadata_url: 'https://auth.example.com/.well-known/oauth-authorization-server',
+      },
+    }).oauth).toEqual({
+      client_id: 'id',
+      auth_server_metadata_url: 'https://auth.example.com/.well-known/oauth-authorization-server',
+    });
+
+    // An emptied field arrives as '' because the editor rebuilds the whole
+    // oauth block; the key must not survive.
+    expect(toMcpEntity({
+      type: 'remote',
+      url: 'https://mcp.example.com',
+      oauth: { client_id: 'id', auth_server_metadata_url: '   ' },
+    }).oauth).toEqual({ client_id: 'id' });
+
+    // Nothing left in the block at all removes `oauth` itself.
+    expect(toMcpEntity({
+      type: 'remote',
+      url: 'https://mcp.example.com',
+      oauth: { auth_server_metadata_url: '' },
+    })).not.toHaveProperty('oauth');
+  });
+
   it('reads v1 mcp.<name> and v2 mcp.servers, with v2 winning', () => {
     const config = {
       mcp: {

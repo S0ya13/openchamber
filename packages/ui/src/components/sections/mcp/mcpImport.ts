@@ -1,4 +1,4 @@
-import type { McpDraft } from '@/stores/useMcpConfigStore';
+import { MCP_PROTOCOLS, type McpDraft, type McpProtocol } from '@/stores/useMcpConfigStore';
 
 export interface ImportedMcpResult {
   readonly ok: true;
@@ -14,11 +14,14 @@ export interface ImportedMcpResult {
   readonly oauthScope: string;
   readonly oauthRedirectUri: string;
   readonly oauthCallbackPort: string;
+  readonly oauthAuthServerMetadataUrl: string;
   readonly timeoutStartup: string;
   readonly timeoutCatalog: string;
   readonly timeoutExecution: string;
   readonly codemode: boolean;
   readonly disabled: boolean;
+  /** Absent in the paste means legacy, as OpenCode reads it. */
+  readonly protocol: McpProtocol;
 }
 
 type ImportedMcpError =
@@ -59,10 +62,11 @@ function buildResult(
   const oauthScope = readString(oauth, 'scope');
   const oauthRedirectUri = readString(oauth, 'redirect_uri', 'redirectUri');
   const oauthCallbackPort = readNumeric(oauth, 'callback_port', 'callbackPort');
+  const oauthAuthServerMetadataUrl = readString(oauth, 'auth_server_metadata_url', 'authServerMetadataUrl');
   const oauthEnabled = raw.oauth === false || raw.oauth === null || raw.oauth === undefined
     ? false
     : Boolean(oauth) && Boolean(
-      oauthClientId || oauthClientSecret || oauthScope || oauthRedirectUri || oauthCallbackPort,
+      oauthClientId || oauthClientSecret || oauthScope || oauthRedirectUri || oauthCallbackPort || oauthAuthServerMetadataUrl,
     );
 
   const timeouts = buildTimeouts(raw);
@@ -81,11 +85,13 @@ function buildResult(
     oauthScope,
     oauthRedirectUri,
     oauthCallbackPort,
+    oauthAuthServerMetadataUrl,
     timeoutStartup: timeouts.startup,
     timeoutCatalog: timeouts.catalog,
     timeoutExecution: timeouts.execution,
     codemode: raw.codemode === true,
     disabled: buildDisabled(raw),
+    protocol: MCP_PROTOCOLS.find((candidate) => candidate === raw.protocol) ?? 'legacy',
   };
 }
 
@@ -384,12 +390,14 @@ export function applyImportedMcpToDraft(
     oauthScope: result.type === 'remote' ? result.oauthScope : '',
     oauthRedirectUri: result.type === 'remote' ? result.oauthRedirectUri : '',
     oauthCallbackPort: result.type === 'remote' ? result.oauthCallbackPort : '',
+    oauthAuthServerMetadataUrl: result.type === 'remote' ? result.oauthAuthServerMetadataUrl : '',
     // `startup` only means something for a server OpenChamber spawns.
     timeoutStartup: result.type === 'local' ? result.timeoutStartup : '',
     timeoutCatalog: result.timeoutCatalog,
     timeoutExecution: result.timeoutExecution,
     codemode: result.codemode,
     disabled: result.disabled,
+    protocol: result.protocol,
   };
 
   return draft;

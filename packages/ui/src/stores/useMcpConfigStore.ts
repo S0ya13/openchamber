@@ -67,7 +67,17 @@ export interface McpOAuthConfig {
   scope?: string;
   callback_port?: number;
   redirect_uri?: string;
+  /** Added in OpenCode 2.0.8; points at the authorization server metadata document. */
+  auth_server_metadata_url?: string;
 }
+
+/**
+ * How OpenCode opens the MCP connection (2.0.8+). An absent key means
+ * `legacy`, so the config file only ever carries the other two.
+ */
+export type McpProtocol = 'legacy' | 'auto' | '2026-07-28';
+
+export const MCP_PROTOCOLS: readonly McpProtocol[] = ['legacy', 'auto', '2026-07-28'];
 
 interface McpConfigBase {
   environment?: Record<string, string>;
@@ -76,6 +86,7 @@ interface McpConfigBase {
   /** Expose the server's tools through Code Mode instead of one tool each. */
   codemode?: boolean;
   timeout?: McpTimeout;
+  protocol?: McpProtocol;
 }
 
 interface McpLocalConfig extends McpConfigBase {
@@ -115,6 +126,8 @@ export interface McpDraft {
   oauthScope: string;
   oauthRedirectUri: string;
   oauthCallbackPort: string;
+  oauthAuthServerMetadataUrl: string;
+  protocol: McpProtocol;
   timeoutStartup: string;
   timeoutCatalog: string;
   timeoutExecution: string;
@@ -491,7 +504,8 @@ function buildMcpBody(config: Partial<McpDraft>): Record<string, unknown> {
     config.oauthClientSecret !== undefined ||
     config.oauthScope !== undefined ||
     config.oauthRedirectUri !== undefined ||
-    config.oauthCallbackPort !== undefined;
+    config.oauthCallbackPort !== undefined ||
+    config.oauthAuthServerMetadataUrl !== undefined;
 
   if (touchesOAuth) {
     if (config.oauthEnabled === false) {
@@ -503,11 +517,15 @@ function buildMcpBody(config: Partial<McpDraft>): Record<string, unknown> {
       const clientSecret = trimOptionalString(config.oauthClientSecret);
       const scope = trimOptionalString(config.oauthScope);
       const redirectUri = trimOptionalString(config.oauthRedirectUri);
+      const authServerMetadataUrl = trimOptionalString(config.oauthAuthServerMetadataUrl);
       if (clientId) oauth.client_id = clientId;
       if (clientSecret) oauth.client_secret = clientSecret;
       if (scope) oauth.scope = scope;
       if (redirectUri) oauth.redirect_uri = redirectUri;
       if (callbackPort !== undefined) oauth.callback_port = callbackPort;
+      // An emptied field drops the key: the object is rebuilt from the form
+      // every save rather than merged onto what is already stored.
+      if (authServerMetadataUrl) oauth.auth_server_metadata_url = authServerMetadataUrl;
 
       if (Object.keys(oauth).length > 0 || config.oauthEnabled) {
         body.oauth = oauth;
@@ -540,6 +558,12 @@ function buildMcpBody(config: Partial<McpDraft>): Record<string, unknown> {
 
   if (config.disabled !== undefined) {
     body.disabled = config.disabled;
+  }
+
+  if (config.protocol !== undefined) {
+    // `legacy` is what OpenCode does without the key, so it is written as a
+    // removal: the config file only ever names a non-default negotiation.
+    body.protocol = config.protocol === 'legacy' ? null : config.protocol;
   }
 
   return body;

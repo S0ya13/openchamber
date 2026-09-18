@@ -388,6 +388,8 @@ const MobileShell: React.FC<{ onActiveConnectionDeleted: () => void }> = ({ onAc
       oauthScope: '',
       oauthRedirectUri: '',
       oauthCallbackPort: '',
+      oauthAuthServerMetadataUrl: '',
+      protocol: 'legacy',
       timeoutStartup: '',
       timeoutCatalog: '',
       timeoutExecution: '',

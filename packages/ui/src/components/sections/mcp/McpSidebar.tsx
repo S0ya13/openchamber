@@ -138,6 +138,8 @@ export const McpSidebar: React.FC<McpSidebarProps> = ({ onItemSelect }) => {
       environment: [],
       headers: [],
       ...MCP_DRAFT_OAUTH_UNSET,
+      oauthAuthServerMetadataUrl: '',
+      protocol: 'legacy',
       timeoutStartup: '',
       timeoutCatalog: '',
       timeoutExecution: '',
