@@ -1,6 +1,6 @@
 ---
 name: updater-testing
-description: Use when a desktop update has to be exercised for real: after changing the updater, the quit or install sequence, or anything the app shuts down before installing; when a report says an update downloaded but never installed, came back on the old version, or left the old binary running; and when a pull request claims a desktop update works and needs a live run to say so.
+description: Runs a desktop update end to end against a loopback feed, so the real installer path executes while the feed does not, and reports what the run does and does not prove. Use when a desktop update has to be exercised for real: after changing the updater, the quit or install sequence, or anything the app shuts down before installing; when a report says an update downloaded but never installed, came back on the old version, or left the old binary running; and when a pull request claims a desktop update works and needs a live run to say so.
 ---
 
 # Updater Testing
@@ -9,13 +9,28 @@ A desktop update cannot be judged from code review. The failures live in the han
 
 Companion: `desktop-shell` owns the Electron privilege boundary and the native lifecycle. This skill owns the procedure for exercising an update end to end.
 
+This is a narrow bridge, not an open field. A single missing gate, or a window closed the wrong way, produces a run that completes the update and reports success while having tested nothing. Follow the steps in order and do not improvise around a step that fails.
+
+Copy this checklist and keep it updated as you go:
+
+```
+Update run:
+- [ ] 1. Builds prepared, each reporting the version intended
+- [ ] 2. All three feed gates confirmed in the log
+- [ ] 3. Test one: plain update installs, app returns on N+1
+- [ ] 4. Test one verified beyond the version number
+- [ ] 5. Test two: window closed inside the shutdown window
+- [ ] 6. Test two's close proven to have reached the app's quit handling
+- [ ] 7. Cleanup done, ports closed, what was left behind recorded
+```
+
+Step 6 is a gate, not a formality. If you cannot point at the log line, the run failed and you repeat it with a faster close. Do not report a pass.
+
 ## What a Run Proves And Does Not Prove
 
 A passing run proves the update installed on **the platform you ran it on**. It says nothing about the others: macOS goes through Squirrel.Mac and a different `quitAndInstall()`, Windows through NSIS, Linux through AppImage replacement. Name the platform in every result.
 
 macOS cannot reproduce the class of defect where closing a window ends the app, because the quit-on-last-window-closed paths are guarded to non-darwin. Linux and Windows share that arbitration and differ only in the installer, so a Linux run is a real result for the logic and Windows still owns NSIS and the unsigned artifact.
-
-Both have been exercised end to end and the procedure below reflects what each one cost.
 
 ## Prepare The Builds
 
@@ -34,7 +49,7 @@ Usually one build is enough. The compile-time marker is only needed in the app t
      --include-workspace-root
    ```
 
-3. Package version N and a higher N+1 on a native host of the target architecture, each into its own output directory, with the fixture's compile-time gate set while bundling main. `packages/electron/scripts/updater-e2e-fixture.md` is the command source of truth; read it rather than copying commands from here.
+3. Package on a native host of the target architecture, each build into its own output directory, with the fixture's compile-time gate set while bundling main. `packages/electron/scripts/updater-e2e-fixture.md` carries the exact commands and stays current with the scripts; read it rather than copying commands from here, and follow it literally rather than adapting it.
 
 Preparation is done when both artifacts exist, each reports the version you intended, and the run directory holds its own copy of N for the updater to replace.
 
@@ -45,6 +60,14 @@ The loopback feed activates only with all three present. Missing one silently fa
 - `OPENCHAMBER_UPDATER_E2E_BUILD=1` embedded while bundling main;
 - `OPENCHAMBER_E2E=1` at run time;
 - `OPENCHAMBER_UPDATER_E2E_URL` pointing at the loopback feed.
+
+Do not assume they took. The app says so on startup, and that line is the only proof the run is pointed at your feed rather than at GitHub:
+
+```
+updater feed configured { provider: 'generic', target: 'http://127.0.0.1:<port>/' }
+```
+
+`provider: 'github'` there means the gates did not take. Stop and fix them; everything after this point would be theatre.
 
 Published release artifacts can never be used as N: they carry no build-time marker. The renderer, IPC bridge, command line, and stored configuration have no access to the feed URL by design.
 
