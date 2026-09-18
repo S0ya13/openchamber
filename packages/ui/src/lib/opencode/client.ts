@@ -349,7 +349,12 @@ const getDesktopFilesApi = (): FilesAPI | null => {
 // /api/fs/home parsing boundary. Older servers answer without chatsRoot;
 // only a valid home response may use the legacy chats-root fallback.
 const fsAbsolutePathSchema = z.string().trim().regex(/^(?:\/|[A-Za-z]:[\\/]|\\\\)/);
-const fsHomeResponseSchema = z.object({ home: fsAbsolutePathSchema, chatsRoot: fsAbsolutePathSchema.optional() });
+const fsHomeResponseSchema = z.object({
+  home: fsAbsolutePathSchema,
+  chatsRoot: fsAbsolutePathSchema.optional(),
+  canonicalChatsRoot: fsAbsolutePathSchema.optional(),
+  canonicalLegacyChatsRoot: fsAbsolutePathSchema.optional(),
+});
 
 class OpencodeService {
   private client: OpencodeClient;
