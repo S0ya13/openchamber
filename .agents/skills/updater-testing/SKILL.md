@@ -1,6 +1,6 @@
 ---
 name: updater-testing
-description: Use when testing, reproducing, or verifying a desktop update install - the Electron updater, the AppImage or NSIS handoff, a stuck or silently skipped update, or any change to the quit/install sequence.
+description: Use when a desktop update has to be exercised for real: after changing the updater, the quit or install sequence, or anything the app shuts down before installing; when a report says an update downloaded but never installed, came back on the old version, or left the old binary running; and when a pull request claims a desktop update works and needs a live run to say so.
 ---
 
 # Updater Testing
