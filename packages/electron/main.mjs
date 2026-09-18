@@ -3085,6 +3085,7 @@ const UPDATE_INSTALL_GRACE_MS = 15_000;
  */
 const installDownloadedUpdate = () => new Promise((resolve, reject) => {
   let settled = false;
+  let graceTimer;
 
   const rollbackQuitState = () => {
     state.quitRequested = false;
@@ -3101,15 +3102,6 @@ const installDownloadedUpdate = () => new Promise((resolve, reject) => {
     reject(error instanceof Error ? error : new Error(String(error)));
   };
 
-  // Still running after the grace period: the install is underway and the app
-  // is shutting down, so release the pending IPC reply.
-  const graceTimer = setTimeout(() => {
-    if (settled) return;
-    settled = true;
-    autoUpdater.off('error', fail);
-    resolve(null);
-  }, UPDATE_INSTALL_GRACE_MS);
-
   autoUpdater.on('error', fail);
 
   // Defer so the renderer's invoke channel is idle before the app starts
@@ -3117,6 +3109,15 @@ const installDownloadedUpdate = () => new Promise((resolve, reject) => {
   setImmediate(async () => {
     try {
       await shutdownBackgroundServices();
+      if (settled) return;
+      // Start the installer error window after terminal cleanup, which can
+      // legitimately take longer than UPDATE_INSTALL_GRACE_MS.
+      graceTimer = setTimeout(() => {
+        if (settled) return;
+        settled = true;
+        autoUpdater.off('error', fail);
+        resolve(null);
+      }, UPDATE_INSTALL_GRACE_MS);
       autoUpdater.quitAndInstall();
     } catch (error) {
       fail(error);
