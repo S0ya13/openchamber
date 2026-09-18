@@ -104,7 +104,6 @@ process violation.
 | Settings UI, settings dialogs, configuration surfaces, or settings search | `settings-ui-patterns` |
 | Sortable or drag-to-reorder behavior, especially `@dnd-kit` and touch/wrapping layouts | `drag-to-reorder` |
 | iOS Simulator build, launch, preview, gestures, or `serve-sim` control | `serve-sim` |
-| Testing or reproducing a desktop update install, the Electron updater, or the quit/install handoff | `updater-testing` |
 | The maintainer explicitly asks to update the changelog (main app or VS Code extension) — the only time `changelog/unreleased.md` is edited | `update-changelog` |
 | Creating or editing skills, `AGENTS.md`, or docs reached through agent instructions/context pointers | `writing-for-agents` |
 | Any work on branch `opencode-v2-refactoring`, "what's new in OpenCode v2", bumping the pinned OpenCode, or a v2 preview build for testers (temporary until the branch merges) | `opencode-v2-branch` |

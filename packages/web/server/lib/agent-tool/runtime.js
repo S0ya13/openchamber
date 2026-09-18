@@ -128,11 +128,24 @@ const createResult = ({ ok, action, data, error, exitCode }) => ({
   ...(Number.isInteger(exitCode) ? { exitCode } : {}),
 });
 
+// Node reports an IPv4 peer on a dual-stack socket as `::ffff:<ipv4>`.
+const normalizeAddress = (value) => {
+  const address = (asNonEmptyString(value) || '').toLowerCase();
+  return address.startsWith('::ffff:') ? address.slice('::ffff:'.length) : address;
+};
+
 const isLoopbackAddress = (value) => {
-  const address = typeof value === 'string' ? value.toLowerCase() : '';
-  return address === '127.0.0.1'
-    || address === '::1'
-    || address === '::ffff:127.0.0.1';
+  const address = normalizeAddress(value);
+  return address === '127.0.0.1' || address === '::1';
+};
+
+const WILDCARD_ADDRESSES = new Set(['0.0.0.0', '::']);
+
+// A wildcard listener answers on loopback. A listener bound to one concrete
+// address answers only there, so that address is the only way back in.
+const resolveConcreteBoundAddress = (value) => {
+  const address = normalizeAddress(value);
+  return address && !WILDCARD_ADDRESSES.has(address) ? address : null;
 };
 
 /**
@@ -147,14 +160,19 @@ const isLoopbackAddress = (value) => {
  * needs no imports at all — which it must not have, because OpenCode loads the
  * entrypoint with a bare dynamic import and nothing resolves from the generated
  * directory.
+ *
+ * The action schema carries `oneOf` only. A node combining `enum` and `oneOf`
+ * is valid JSON Schema, but some OpenAI-compatible gateways reject it and
+ * answer with an empty completion instead of an error, and the `oneOf` branches
+ * are what carry the per-action descriptions the model reads.
  */
-const createToolEntry = ({ name, description, actions, definitions, parameters }) => String.raw`    tools.add({
+const createToolEntry = ({ name, description, definitions, parameters }) => String.raw`    tools.add({
       name: ${JSON.stringify(name)},
       description: ${JSON.stringify(description)},
       input: {
         type: "object",
         properties: {
-          action: { type: "string", enum: ${JSON.stringify(actions)}, oneOf: ${JSON.stringify(definitions.map((entry) => ({ const: entry.action, description: entry.description })))}, description: "OpenChamber action to perform" },
+          action: { type: "string", oneOf: ${JSON.stringify(definitions.map((entry) => ({ const: entry.action, description: entry.description })))}, description: "OpenChamber action to perform" },
           parameters: { type: "object", properties: ${JSON.stringify(parameters)}, additionalProperties: false, description: "Inputs for the action; use an empty object when none are needed" },
         },
         required: ["action"],
@@ -225,7 +243,6 @@ const createPluginSource = ({ includeControl, includeWeb, includeMemory }) => {
     entries.push(createToolEntry({
       name: 'openchamber',
       description: CONTROL_TOOL_DESCRIPTION,
-      actions: OPENCHAMBER_AGENT_TOOL_ACTIONS,
       definitions: OPENCHAMBER_AGENT_TOOL_ACTION_DEFINITIONS,
       parameters: CONTROL_PARAMETER_PROPERTIES,
     }));
@@ -234,7 +251,6 @@ const createPluginSource = ({ includeControl, includeWeb, includeMemory }) => {
     entries.push(createToolEntry({
       name: 'openchamber_web',
       description: WEB_TOOL_DESCRIPTION,
-      actions: OPENCHAMBER_WEB_ACTIONS,
       definitions: OPENCHAMBER_WEB_ACTION_DEFINITIONS,
       parameters: WEB_PARAMETER_PROPERTIES,
     }));
@@ -243,15 +259,30 @@ const createPluginSource = ({ includeControl, includeWeb, includeMemory }) => {
     entries.push(createToolEntry({
       name: 'openchamber_memory',
       description: MEMORY_TOOL_DESCRIPTION,
-      actions: OPENCHAMBER_MEMORY_ACTIONS,
       definitions: OPENCHAMBER_MEMORY_ACTION_DEFINITIONS,
       parameters: MEMORY_PARAMETER_PROPERTIES,
     }));
   }
 
-  return `export default {
+  // The callback carries the per-child token over plain HTTP. With a proxy in
+  // the child's environment, fetch would hand a non-loopback callback, token
+  // included, to that proxy, and no per-request option turns that off. The
+  // exemption is added inside the child because only there is the final
+  // NO_PROXY, merged from the shell and server environments, visible.
+  return `const exemptCallbackFromProxy = () => {
+  const endpoint = process.env.OPENCHAMBER_AGENT_TOOL_URL
+  if (!endpoint || !URL.canParse(endpoint)) return
+  const host = new URL(endpoint).hostname.replace(/^\\[|\\]$/g, "")
+  for (const key of ["NO_PROXY", "no_proxy"]) {
+    const entries = (process.env[key] || "").split(",").map((entry) => entry.trim()).filter(Boolean)
+    if (!entries.includes(host)) process.env[key] = [...entries, host].join(",")
+  }
+}
+
+export default {
   id: ${JSON.stringify(PLUGIN_ID)},
   setup: async (ctx) => {
+    exemptCallbackFromProxy()
     await ctx.tool.transform((tools) => {
 ${entries.join('')}    })
   },
@@ -276,6 +307,7 @@ export const createAgentToolRuntime = (dependencies) => {
     path,
     dataDir,
     getActivePort,
+    getActiveHost = () => null,
     executeAction,
     resolveSessionDirectory,
   } = dependencies;
@@ -284,6 +316,8 @@ export const createAgentToolRuntime = (dependencies) => {
   const pluginPath = path.join(pluginDirectory, 'index.js');
   const pluginManifestPath = path.join(pluginDirectory, 'package.json');
   let activeToken = null;
+
+  const getConcreteBoundAddress = () => resolveConcreteBoundAddress(getActiveHost());
 
   /**
    * Write the plugin for the requested tool set and return its directory.
@@ -315,14 +349,27 @@ export const createAgentToolRuntime = (dependencies) => {
       throw new Error('OpenChamber listener port is unavailable for managed tool injection');
     }
     activeToken = crypto.randomBytes(32).toString('base64url');
+    // A listener bound to one concrete address does not answer on loopback,
+    // so the callback has to point at the bound address instead.
+    const callbackAddress = getConcreteBoundAddress() || '127.0.0.1';
+    const callbackHost = callbackAddress.includes(':') ? `[${callbackAddress}]` : callbackAddress;
     return {
-      OPENCHAMBER_AGENT_TOOL_URL: `http://127.0.0.1:${port}/api/openchamber/agent-tool`,
+      OPENCHAMBER_AGENT_TOOL_URL: `http://${callbackHost}:${port}/api/openchamber/agent-tool`,
       OPENCHAMBER_AGENT_TOOL_TOKEN: activeToken,
     };
   };
 
+  // The managed child runs on this machine. Reaching a listener bound to one
+  // concrete address makes the OS source the connection from that same address,
+  // so it stands in for loopback there; any other machine arrives as itself.
+  const isSameMachineAddress = (value) => {
+    if (isLoopbackAddress(value)) return true;
+    const boundAddress = getConcreteBoundAddress();
+    return boundAddress !== null && normalizeAddress(value) === boundAddress;
+  };
+
   const authorize = (req) => {
-    if (!activeToken || !isLoopbackAddress(req.socket?.remoteAddress)) return false;
+    if (!activeToken || !isSameMachineAddress(req.socket?.remoteAddress)) return false;
     const header = asNonEmptyString(req.headers?.authorization);
     if (!header?.startsWith('Bearer ')) return false;
     const provided = Buffer.from(header.slice(7));

@@ -103,6 +103,18 @@ describe('routing send rewrite', () => {
     expect(text.forwarded[0]).toEqual({ path: '/session/s1/command', parsed: false, raw: 'raw' });
   });
 
+  it('refuses the Auto sentinel with a readable error when the flag is off', async () => {
+    const { app, forwarded, runtime } = createApp({ flag: '' });
+    const response = await request(app).post('/api/session/s1/model').send({ model: { providerID: 'openchamber', id: 'auto' } });
+    expect(response.status).toBe(400);
+    expect(response.body.error).toMatch(/not available/);
+    expect(forwarded).toEqual([]);
+    expect(runtime.noteModelSelection).not.toHaveBeenCalled();
+
+    await request(app).post('/api/session/s1/model').send({ model: { providerID: 'anthropic', id: 'claude-opus-5' } }).expect(204);
+    expect(forwarded).toEqual([{ path: '/session/s1/model', parsed: true, body: { model: { providerID: 'anthropic', id: 'claude-opus-5' } } }]);
+  });
+
   it('answers with the runtime error instead of forwarding an unroutable send', async () => {
     const { app, forwarded } = createApp({
       autoSessions: new Set(['s1']),

@@ -35,12 +35,15 @@ both settings are `false`.
    `<openchamber-data-dir>/agent-tool/` and returns its directory; the managed
    config layer lists that directory in `<data-dir>/opencode.managed.json` and
    rewrites the file whenever a tool setting changes.
-3. `createChildEnv()` adds a random per-child token and the loopback callback
-   URL to the managed OpenCode child environment. They are present even while
-   every tool is off, so a tool switched on later can call back without a
-   restart.
+3. `createChildEnv()` adds a random per-child token and the callback URL to the
+   managed OpenCode child environment. They are present even while every tool
+   is off, so a tool switched on later can call back without a restart. The URL
+   points at loopback, except when the listener is bound to one concrete
+   address (`--host <ip>`): that socket does not answer on loopback, so the URL
+   uses the bound address instead.
 4. The plugin calls `POST /api/openchamber/agent-tool` with its typed input and
-   OpenCode's authoritative session directory.
+   the session id OpenCode gives the tool; OpenChamber resolves the session's
+   directory on its own side.
 5. The route delegates the fixed action allowlist directly to the shared
    OpenChamber control service. The CLI uses the same service through its
    authenticated HTTP adapter, so Goal Mode ordering, wait behavior,
@@ -55,6 +58,9 @@ both settings are `false`.
 - The tool exposes one shared parameter object rather than repeating parameters
   in a large per-action union. Action descriptions carry only required inputs,
   defaults, or one non-obvious semantic detail.
+- The action schema carries `oneOf` and no `enum`. A node combining `enum` and
+  `oneOf` is valid JSON Schema, but some OpenAI-compatible gateways reject it
+  and answer with an empty completion instead of an error.
 - Obvious fields rely on their names and JSON types. Parameter descriptions are
   reserved for formats, dependencies, scope, and behavior that cannot be safely
   inferred from the field name.
@@ -76,10 +82,18 @@ both settings are `false`.
 
 ## Security invariants
 
-- The callback accepts loopback requests only and requires the current
-  per-child bearer token using a timing-safe comparison.
+- The callback accepts same-machine requests only and requires the current
+  per-child bearer token using a timing-safe comparison. Same-machine means a
+  loopback source, or, for a listener bound to one concrete address, a source
+  equal to that address: the OS sources a local connection to `<ip>` from
+  `<ip>`. A wildcard bind keeps the loopback-only rule, and another machine on
+  the network always arrives with its own address.
 - The token is never persisted, logged, returned to the UI, or written into
   the materialized plugin.
+- The plugin adds the callback host to `NO_PROXY`/`no_proxy` inside the managed
+  child when it loads. Without that, an `HTTP_PROXY` in the child's environment
+  would receive a non-loopback callback, token included, because `fetch` has no
+  per-request way to skip the environment proxy.
 - Inputs map to a fixed action and parameter allowlist. There is no arbitrary
   CLI, shell, route, or URL forwarding.
 - Session/worktree deletion and project-path registration are not exposed.

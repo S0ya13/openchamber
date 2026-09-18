@@ -19,6 +19,7 @@
  */
 import express from 'express';
 import { isRoutingFeatureAvailable } from './feature-flag.js';
+import { isAutoModel } from './defaults.js';
 
 const MODEL_PATH = '/api/session/:sessionId/model';
 const SEND_PATHS = [
@@ -75,9 +76,9 @@ export function registerRoutingRoutes(app, runtime) {
 export function registerRoutingPromptRewrite(app, runtime) {
   const parseJson = express.json({ limit: '50mb' });
 
-  /** Parses the body only for JSON requests while the flag is on. */
-  const withParsedBody = (handler) => (req, res, next) => {
-    if (!isRoutingFeatureAvailable()) return next();
+  /** Parses the body only for JSON requests; by default only while the flag is on. */
+  const withParsedBody = (handler, { always = false } = {}) => (req, res, next) => {
+    if (!always && !isRoutingFeatureAvailable()) return next();
     const contentType = String(req.headers['content-type'] ?? '').toLowerCase();
     if (!contentType.includes('application/json')) return next();
     parseJson(req, res, (parseError) => {
@@ -91,13 +92,22 @@ export function registerRoutingPromptRewrite(app, runtime) {
     return url.searchParams.get('directory') || req.get('x-opencode-directory') || undefined;
   };
 
+  // The sentinel is inspected even without the flag: a client that still holds
+  // an `openchamber/auto` selection from another build must get a readable
+  // refusal here, never OpenCode's "provider.no-route" after the switch lands.
   app.post(MODEL_PATH, withParsedBody((req, res, next) => {
+    if (!isRoutingFeatureAvailable()) {
+      if (isAutoModel(req.body?.model)) {
+        return res.status(400).json({ error: 'Auto routing is not available on this server. Choose a model.' });
+      }
+      return next();
+    }
     const directory = directoryOf(req);
     // Swallowed, not forwarded: OpenCode has no `openchamber` provider, and the
     // real model is only known once the request text arrives.
     if (runtime.noteModelSelection(req.params.sessionId, req.body?.model, directory)) return res.status(204).end();
     next();
-  }));
+  }, { always: true }));
 
   app.post(SEND_PATHS, withParsedBody((req, res, next) => {
     const sessionId = req.params.sessionId;

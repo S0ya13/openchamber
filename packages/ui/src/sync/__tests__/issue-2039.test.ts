@@ -5,6 +5,7 @@ const storage = new Map<string, string>()
 const createSessionCalls: Array<{ title?: string; directory: string | null; metadata?: unknown }> = []
 const permissionAutoAcceptCalls: Array<[string, boolean]> = []
 const savedVariantCalls: Array<string | undefined> = []
+const savedAgentModelCalls: Array<[string, string, string, string]> = []
 const applyDefaultModelAgentSelectionCalls: Array<{
   projectDefaultAgent?: string | null
   projectDefaultModel?: string | null
@@ -222,7 +223,9 @@ mock.module("../selection-store", () => ({
     getState: () => ({
       saveSessionModelSelection: () => undefined,
       saveSessionAgentSelection: () => undefined,
-      saveAgentModelForSession: () => undefined,
+      saveAgentModelForSession: (sessionId: string, agent: string, provider: string, model: string) => {
+        savedAgentModelCalls.push([sessionId, agent, provider, model])
+      },
       saveAgentModelVariantForSession: (_sessionId: string, _agent: string, _provider: string, _model: string, variant: string | undefined) => {
         savedVariantCalls.push(variant)
       },
@@ -439,6 +442,7 @@ describe("issue 2039 draft auto-accept", () => {
     sessionDirectoryRegistry.clear()
     permissionAutoAcceptCalls.length = 0
     savedVariantCalls.length = 0
+    savedAgentModelCalls.length = 0
     configVariantOverride = undefined
     activationPending = undefined
     selectionSource = 'auto'
@@ -505,6 +509,31 @@ describe("issue 2039 draft auto-accept", () => {
     })
 
     expect(savedVariantCalls).toEqual([undefined, "high"])
+  })
+
+  test("stores a draft agent model only after an explicit model choice", async () => {
+    useSessionUIStore.getState().openNewSessionDraft()
+    await materializeOpenDraftSession({
+      providerID: "provider",
+      modelID: "model",
+      agent: "agent-default",
+      variant: "high",
+    })
+
+    expect(savedAgentModelCalls).toEqual([])
+
+    selectionSource = "manual"
+    useSessionUIStore.getState().openNewSessionDraft()
+    await materializeOpenDraftSession({
+      providerID: "provider",
+      modelID: "other-model",
+      agent: "agent-default",
+      variant: "high",
+    })
+
+    expect(savedAgentModelCalls).toEqual([
+      ["ses_issue_2039", "agent-default", "provider", "other-model"],
+    ])
   })
 
   test("preserves choices when a draft keeps the same project", async () => {

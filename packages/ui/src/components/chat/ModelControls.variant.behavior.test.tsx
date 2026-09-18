@@ -40,6 +40,8 @@ const model = {
 };
 const provider = { id: PROVIDER_ID, name: PROVIDER_ID, models: [model] };
 const agent = { id: AGENT, name: AGENT, displayName: AGENT, mode: 'primary' as const, hidden: false, request: { settings: {}, headers: {}, body: {} }, permissions: [] };
+/** v2 pins an agent's model, and its effort, in one model reference. */
+type TestAgent = typeof agent & { model?: { providerID: string; id: string; variant?: string } };
 
 let latestUserChoice: UserModelChoice | null = null;
 let forcePreserveManualOverride: boolean | null = null;
@@ -51,7 +53,7 @@ const overrideWrites: Array<{ override: VariantChoice; inherited: string | undef
 
 type ConfigState = {
   providers: typeof provider[];
-  agents: typeof agent[];
+  agents: TestAgent[];
   providersLoaded: boolean;
   agentsLoaded: boolean;
   settingsDefaultsLoaded: boolean;
@@ -71,8 +73,8 @@ type ConfigState = {
   setCurrentVariant: (variant: string | undefined) => void;
   setCurrentVariantOverride: (override: VariantChoice, inherited: string | undefined) => void;
   getCurrentProvider: () => typeof provider | undefined;
-  getCurrentAgent: () => typeof agent;
-  getVisibleAgents: () => typeof agent[];
+  getCurrentAgent: () => TestAgent;
+  getVisibleAgents: () => TestAgent[];
   getCurrentModelVariants: () => string[];
   getModelMetadata: () => undefined;
 };
@@ -117,7 +119,7 @@ const useConfigStore = create<ConfigState>((set, get) => ({
     });
   },
   getCurrentProvider: () => get().providers.find((entry) => entry.id === get().currentProviderId),
-  getCurrentAgent: () => agent,
+  getCurrentAgent: () => get().agents.find((entry) => entry.name === get().currentAgentName) ?? agent,
   getVisibleAgents: () => get().agents,
   getCurrentModelVariants: () => Object.keys(model.variants),
   getModelMetadata: () => undefined,
@@ -201,6 +203,7 @@ mock.module('@/lib/messages/userModelChoice', () => ({
 
 mock.module('@/stores/useConfigStore', () => ({
   useConfigStore,
+  isStaleAutoSelection: () => false,
   selectCatalogLoadedForDirectory: (state: ConfigState, resource: 'models' | 'agents') => resource === 'models' ? state.providersLoaded : state.agentsLoaded,
 }));
 mock.module('@/sync/selection-store', () => ({ useSelectionStore }));
@@ -401,6 +404,31 @@ describe('ModelControls effort restore', () => {
     });
   }
 
+  test('a draft inherits a pinned agent variant over the settings default', async () => {
+    useSessionUIStore.setState({ currentSessionId: null });
+    useConfigStore.setState({
+      agents: [{
+        ...agent,
+        // v2 pins the agent's effort inside its model reference.
+        model: { providerID: PROVIDER_ID, id: MODEL_ID, variant: 'high' },
+      }],
+      currentVariant: 'high',
+      currentVariantSelection: { override: undefined, inherited: 'high' },
+      settingsDefaultVariant: 'low',
+    });
+
+    const { cleanup } = await renderModelControls();
+    try {
+      expect(useConfigStore.getState().currentVariant).toBe('high');
+      expect(useConfigStore.getState().currentVariantSelection).toEqual({
+        override: undefined,
+        inherited: 'high',
+      });
+    } finally {
+      await cleanup();
+    }
+  });
+
   test('restores the concrete effort the session history carries', async () => {
     latestUserChoice = { id: 'msg-1', agent: AGENT, providerID: PROVIDER_ID, modelID: MODEL_ID, variant: 'low' };
     useUIStore.setState({ isModelSelectorOpen: true });
@@ -574,6 +602,23 @@ describe('ModelControls effort restore', () => {
       expect(useSelectionStore.getState().savedVariant).toBe(undefined);
       expect(useConfigStore.getState().currentVariantSelection.override).toBe(undefined);
     } finally {
+      await cleanup();
+    }
+  });
+
+  test('does not reapply persisted session selections after a live agent change', async () => {
+    const selections = useSelectionStore.getState();
+    const getSessionModel = spyOn(selections, 'getSessionModelSelection');
+    const { cleanup } = await renderModelControls();
+    try {
+      const callsAfterHydration = getSessionModel.mock.calls.length;
+
+      await act(async () => useConfigStore.setState({ currentAgentName: 'plan' }));
+
+      expect(getSessionModel.mock.calls.length).toBe(callsAfterHydration);
+      expect(useConfigStore.getState().currentAgentName).toBe('plan');
+    } finally {
+      getSessionModel.mockRestore();
       await cleanup();
     }
   });
