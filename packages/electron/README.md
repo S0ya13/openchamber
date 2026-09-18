@@ -26,6 +26,10 @@ remaining backend cleanup. It uses the detached OpenCode killer only if normal
 shutdown fails or times out. An external OpenCode server remains externally
 owned. Closing to the tray does not stop the backend.
 
+Update installation bounds the full background-service shutdown, including SSH,
+to 40 seconds. This outer deadline leaves the backend's 35-second wait intact;
+its timer is cleared when shutdown finishes.
+
 See [process ownership and the #3589 investigation](./process-lifecycle.md)
 for the launch paths, controlled reproductions, and Windows validation limits.
 

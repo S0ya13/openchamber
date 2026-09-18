@@ -94,6 +94,11 @@ the header and mobile list. Enter explicitly submits the owning form on
 keydown; Escape cancels. IME composition keys keep their text-input behavior,
 and held Enter does not submit repeatedly.
 
+Run fusion eligibility comes from `lib/multirun/identity.ts`, with title parsing
+only for unmarked legacy sessions. Row memoization compares those same semantics
+so metadata-only membership changes update the menu. See
+`lib/multirun/DOCUMENTATION.md` for source selection and fork rules.
+
 ## Search
 
 Dedicated search fields in the sidebar, mobile session list, and archive submit
