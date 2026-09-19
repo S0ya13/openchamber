@@ -370,6 +370,78 @@ describe('guest surface runtime', () => {
     expect(service.callsTo(SURFACE_CONTROL_PATH).map((call) => call.body)).toEqual([{ controller: 'user' }, { controller: 'none' }]);
   });
 
+  test('a queued input from before a hand-back does not take control again', async () => {
+    const { port, service, runtime } = await createHarness();
+    const viewer = await openViewer(port);
+    await viewer.next(); await viewer.next();
+    const modifiers = { alt: false, ctrl: false, meta: false, shift: false };
+    let open;
+    service.gateNextInput(new Promise((resolve) => { open = resolve; }));
+    viewer.send({ type: 'input', events: [{ type: 'key', action: 'down', key: 'a', code: 'KeyA', modifiers }] });
+    expect(await viewer.next()).toMatchObject({ type: 'control', controller: 'user', mine: true });
+    viewer.send({ type: 'input', events: [{ type: 'key', action: 'down', key: 'b', code: 'KeyB', modifiers }] });
+    viewer.send({ type: 'release' });
+    expect(await viewer.next()).toEqual({ type: 'control', controller: 'none', mine: false });
+    expect(runtime.userControls('sim')).toBe(false);
+    open();
+    await settle();
+    await settle();
+    expect(runtime.userControls('sim')).toBe(false);
+    // B was typed before the release and still belonged to the holder: it is
+    // not re-taken, and it is not delivered under nobody's control either.
+    expect(service.completed.map((event) => event.key)).toEqual(['a']);
+  });
+
+  test('a queued input from a viewer that left never makes it the controller', async () => {
+    const { port, service, runtime } = await createHarness();
+    const first = await openViewer(port);
+    await first.next(); await first.next();
+    const second = await openViewer(port);
+    await second.next(); await second.next();
+    const modifiers = { alt: false, ctrl: false, meta: false, shift: false };
+    let open;
+    service.gateNextInput(new Promise((resolve) => { open = resolve; }));
+    first.send({ type: 'input', events: [{ type: 'key', action: 'down', key: 'a', code: 'KeyA', modifiers }] });
+    await first.next();
+    expect(await second.next()).toEqual({ type: 'control', controller: 'user', mine: false });
+    first.send({ type: 'input', events: [{ type: 'key', action: 'down', key: 'b', code: 'KeyB', modifiers }] });
+    first.ws.close();
+    expect(await second.next()).toEqual({ type: 'control', controller: 'none', mine: false });
+    open();
+    await settle();
+    await settle();
+    expect(runtime.userControls('sim')).toBe(false);
+    second.send({ type: 'input', events: [{ type: 'key', action: 'down', key: 'c', code: 'KeyC', modifiers }] });
+    expect(await second.next()).toEqual({ type: 'control', controller: 'user', mine: true });
+    await settle();
+    expect(service.completed.map((event) => event.key)).toEqual(['a', 'c']);
+  });
+
+  test('a deactivation while the closed panel\'s farewell is still queued cancels it', async () => {
+    const { port, service, runtime, holds } = await createHarness();
+    const viewer = await openViewer(port);
+    await viewer.next(); await viewer.next();
+    const modifiers = { alt: false, ctrl: false, meta: false, shift: false };
+    let open;
+    service.gateNextInput(new Promise((resolve) => { open = resolve; }));
+    viewer.send({ type: 'input', events: [{ type: 'key', action: 'down', key: 'a', code: 'KeyA', modifiers }] });
+    await viewer.next();
+    await settle();
+    viewer.ws.close();
+    await viewer.closed;
+    await settle();
+    // The session is still registered: its final "none" waits behind the slow input.
+    expect(runtime.sessionOf('sim')).not.toBeNull();
+    const callsBefore = service.calls.length;
+    runtime.endForGuest('sim');
+    open();
+    await settle();
+    await settle();
+    expect(service.calls.length).toBe(callsBefore);
+    expect(runtime.sessionOf('sim')).toBeNull();
+    expect(holds[0].released).toBe(true);
+  });
+
   test('resize and clipboard reads round-trip through the service', async () => {
     const { port, service } = await createHarness();
     const viewer = await openViewer(port);

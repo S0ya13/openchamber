@@ -164,8 +164,8 @@ export const createGuestSurfaceRuntime = ({
     return run;
   };
 
-  const notifyService = async (session, controller, { evenIfEnded = false } = {}) => {
-    if (session.ended && !evenIfEnded) return;
+  const notifyService = async (session, controller) => {
+    if (session.ended) return;
     try {
       const { response, finished } = await serviceRequest(session, {
         method: 'POST',
@@ -340,6 +340,7 @@ export const createGuestSurfaceRuntime = ({
       releaseHold: holdService(guestId),
       ended: false,
       queue: Promise.resolve(),
+      handoffs: 0,
     };
     sessions.set(guestId, session);
     return session;
@@ -350,14 +351,21 @@ export const createGuestSurfaceRuntime = ({
     event.type !== 'pointer' || event.action !== 'move' || event.buttons !== 0
   ));
 
-  const handleInput = async (session, viewer, events) => {
+  /**
+   * `handoff` is the session's hand-off counter as it was when the batch
+   * arrived. A batch that predates a release or a disconnect must not take
+   * control back: the user already let go, and re-taking it from a queued
+   * click would lock the agent out with nobody to press the button.
+   */
+  const handleInput = async (session, viewer, events, handoff) => {
+    if (viewer.gone) return;
     if (session.controller !== viewer.id) {
       if (session.controller !== 'none' && session.controller !== 'agent') {
         // Someone else is in; say so instead of clicking under them.
         send(viewer, { type: 'control', controller: 'user', mine: false });
         return;
       }
-      if (!isDeliberate(events)) return;
+      if (!isDeliberate(events) || handoff !== session.handoffs) return;
       setController(session, viewer.id);
     }
     try {
@@ -447,11 +455,16 @@ export const createGuestSurfaceRuntime = ({
           deliverLatest(session, viewer);
         }
         return;
-      case 'input':
-        void enqueue(session, () => handleInput(session, viewer, message.events));
+      case 'input': {
+        const handoff = session.handoffs;
+        void enqueue(session, () => handleInput(session, viewer, message.events, handoff));
         return;
+      }
       case 'release':
-        if (session.controller === viewer.id) setController(session, 'none');
+        if (session.controller === viewer.id) {
+          session.handoffs += 1;
+          setController(session, 'none');
+        }
         return;
       case 'resize':
         void enqueue(session, () => handleResize(session, viewer, message.width, message.height));
@@ -466,7 +479,7 @@ export const createGuestSurfaceRuntime = ({
 
   const attachViewer = (guestId, guest, ws) => {
     const session = ensureSession(guestId, guest);
-    const viewer = { id: createViewerId(), ws, sentSeq: 0, awaitingAck: false };
+    const viewer = { id: createViewerId(), ws, sentSeq: 0, awaitingAck: false, gone: false };
     session.viewers.set(viewer.id, viewer);
     // Started with the first viewer in place: the pump's loop condition is
     // the viewer count, and it is checked before the first await.
@@ -480,6 +493,7 @@ export const createGuestSurfaceRuntime = ({
       handleViewerMessage(session, viewer, raw);
     });
     ws.on('close', () => {
+      viewer.gone = true;
       session.viewers.delete(viewer.id);
       // An ended session (pause, removal, withdrawn approval, service gone)
       // must not talk to the service again: that would start it back up
@@ -487,26 +501,24 @@ export const createGuestSurfaceRuntime = ({
       if (session.ended) return;
       const held = session.controller === viewer.id;
       if (held) {
-        session.controller = 'none';
-        clearAgentTimer(session);
-        for (const other of session.viewers.values()) send(other, { type: 'control', controller: 'none', mine: false });
+        session.handoffs += 1;
+        setController(session, 'none');
       }
-      if (session.viewers.size > 0) {
-        if (held) void enqueue(session, () => notifyService(session, 'none'));
-        return;
-      }
-      // Nobody is watching: stop pulling frames and let the service idle out.
-      // The extension still learns the user let go, so its own automation
-      // can resume; this session's authorization is intact here, unlike the
-      // ended paths above.
-      const farewell = held
-        ? session.queue.then(() => notifyService(session, 'none', { evenIfEnded: true })).catch(() => undefined)
-        : Promise.resolve();
-      session.ended = true;
-      sessions.delete(guestId);
+      if (session.viewers.size > 0) return;
+      // Nobody is watching: stop pulling frames. The session stays
+      // registered until its queue (including the final "none" above) has
+      // drained, so a deactivation in the meantime still finds it and
+      // cancels that work instead of letting it restart the service.
       clearAgentTimer(session);
       session.pumpAbort?.abort();
-      void farewell.finally(() => session.releaseHold?.());
+      session.pumpAbort = null;
+      void session.queue.then(() => {
+        if (session.ended || session.viewers.size > 0) return;
+        session.ended = true;
+        sessions.delete(guestId);
+        session.releaseHold?.();
+        session.releaseHold = null;
+      });
     });
     ws.on('error', () => {
       try {
