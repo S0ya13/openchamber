@@ -26,7 +26,12 @@ itself; it can only ask and wait.
   other status or shape is reported as unknown page state. A selected extension
   that cannot serve (`isBrowserProviderGuest`: enabled, fully approved, has the
   role) resets the setting to `builtin`, emits
-  `openchamber:browser-provider-reset`, and runs the action in-app.
+  `openchamber:browser-provider-reset`, and runs the action in-app. A settings
+  or catalog read that fails is not that: the action fails with 503, nothing
+  runs anywhere, and the choice stays, because a read error says nothing
+  about the extension and an action must never land in a browser the user
+  did not pick. `REQUEST_FAILED` (sent, no answer) is reported to the agent
+  as "may or may not have run, read the page first", never as unchanged.
   `handleGuestDeactivated` does the same reset when the guest routes pause,
   remove, or withdraw approval from the selected extension.
   When the extension also shows a shared surface (`../guests/surface.js`),

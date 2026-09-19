@@ -79,8 +79,18 @@ export const createBrowserControlRouter = ({
 }) => {
   // `browserProvider` was sanitized on write (settings-helpers.js keeps a
   // trimmed non-empty string), so the only decision left is builtin or not.
+  // A read that fails is not "builtin": the action must not run somewhere
+  // the user did not choose.
   const selectedProviderId = async () => {
-    const settings = await readSettings().catch(() => null);
+    let settings;
+    try {
+      settings = await readSettings();
+    } catch {
+      throw new BrowserControlError(
+        'OpenChamber could not read which browser answers agent actions, so the action was not run. Try again.',
+        503,
+      );
+    }
     const value = settings?.browserProvider ?? BUILTIN_BROWSER_PROVIDER;
     return value === BUILTIN_BROWSER_PROVIDER ? null : String(value);
   };
@@ -120,10 +130,14 @@ export const createBrowserControlRouter = ({
       });
     } catch (error) {
       if (error instanceof GuestServiceError) {
-        // Read by the agent: what happened and that the page is untouched.
+        // Read by the agent. A request that was sent and lost may have been
+        // acted on; only a service that never took it leaves the page as it was.
+        const outcome = error.code === 'REQUEST_FAILED' || error.code === 'CANCELLED'
+          ? 'The action was sent but no answer came back, so it may or may not have run; read the page before repeating it.'
+          : 'Nothing was changed.';
         throw new BrowserControlError(
-          `The browser provider "${guest.name}" could not run this action (${error.code}): ${error.message} Nothing was changed.`,
-          503,
+          `The browser provider "${guest.name}" could not complete this action (${error.code}): ${error.message} ${outcome}`,
+          error.code === 'REQUEST_FAILED' ? 504 : 503,
         );
       }
       throw error;
@@ -159,7 +173,17 @@ export const createBrowserControlRouter = ({
       if (!providerId) {
         return broker.request(action, parameters, options);
       }
-      const guest = await findGuest(providerId).catch(() => null);
+      let guest;
+      try {
+        guest = await findGuest(providerId);
+      } catch {
+        // The catalog could not be read; that says nothing about the
+        // extension, so neither the choice nor the target browser changes.
+        throw new BrowserControlError(
+          'OpenChamber could not read the extension catalog, so the action was not run. Try again.',
+          503,
+        );
+      }
       if (!isBrowserProviderGuest(guest)) {
         await resetToBuiltin({ guestId: providerId, guestName: guest?.name ?? providerId });
         return broker.request(action, parameters, options);

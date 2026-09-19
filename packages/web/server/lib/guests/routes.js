@@ -566,7 +566,7 @@ export const registerGuestRoutes = (app, {
       res.json(result);
     } catch (error) {
       if (error instanceof GuestServiceError) {
-        const status = error.code === 'SERVICE_FAILED' ? 502 : 400;
+        const status = error.code === 'SERVICE_FAILED' || error.code === 'REQUEST_FAILED' ? 502 : 400;
         return res.status(status).json({ error: error.code, message: error.message });
       }
       console.error('Failed to proxy guest service request:', error);

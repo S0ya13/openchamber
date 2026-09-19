@@ -109,7 +109,8 @@ Error codes:
 
 - `NO_SERVICE` — no service declared, not granted, not started, or already torn down
 - `DISABLED` — extension paused in Settings → Extensions (service stopped; tokens/grants stay)
-- `SERVICE_FAILED` — process crashed or never became ready
+- `SERVICE_FAILED` — process crashed or never became ready; nothing was sent to it
+- `REQUEST_FAILED` — the request was sent but got no usable answer (timeout, dropped connection); the service may have acted on it
 - Existing: `HOST_TIMEOUT`, `HOST_REJECTED`, `HOST_UNAVAILABLE`, `BAD_PATH`
 
 Server routes (authenticated UI session):
@@ -216,7 +217,7 @@ Parameters the host sends and `data` the service answers; types are exported fro
 
 A surface lets a person watch what an agent is working in and step in for a manual step. It is not about browsers: a service that drives a browser, a simulator, or a desktop app can show one. The host draws it in the extension's rail panel (a canvas; the extension runs no code there), sends the user's pointer, keyboard, and paste back, and decides who is in control.
 
-Control has three states. Nobody, the agent (for `SURFACE_AGENT_HOLD_MS`, 30 s, after each action the host ran against this extension, such as a browser provider action), or the user. The user takes control by acting: the first click or key while nobody or the agent holds it. While the user holds it, the host refuses the browser provider's actions with a message that tells the agent to wait or ask, and the panel shows a "Hand back to agent" button. A second device sees who holds control and cannot take it. Every change is posted to the service so its own automation can pause. The service is kept running while a viewer is attached, and returns to its idle window when the last one leaves.
+Control has three states. Nobody, the agent (for `SURFACE_AGENT_HOLD_MS`, 30 s, after each action the host ran against this extension, such as a browser provider action), or the user. The user takes control by acting: the first click, wheel, key, or paste while nobody or the agent holds it. Moving the pointer over the picture is looking, not acting; it takes nothing and is not even sent until the user holds control. While the user holds it, the host refuses the browser provider's actions with a message that tells the agent to wait or ask, and the panel shows a "Hand back to agent" button. A second device sees who holds control and cannot take it. Every change is posted to the service so its own automation can pause. The service is kept running while a viewer is attached, and returns to its idle window when the last one leaves.
 
 ### Wire
 
@@ -230,6 +231,6 @@ Plain HTTP on the service loopback, same bearer as everything else:
 | `POST /surface/resize` | `{ width, height }` the panel can show, in device pixels. Answer `{ width, height }` you settled on, or 400 to keep your size. Parse with `readSurfaceResizeRequest`. |
 | `GET /surface/clipboard` | `{ text }`: what the user copied inside the surface. The host asks after a copy chord and puts it on the user's clipboard. |
 
-Copy and paste: the host sends `Ctrl/Cmd+C` as a `key` event and then reads `/surface/clipboard`; it never sends the paste chord, it sends a `text` event with the pasted text instead. Every other key reaches you as pressed, including the host's own shortcuts, which stand down while the surface has focus.
+Input, control notices, resizes, and clipboard reads reach the service one at a time, in the order the viewer sent them, so a batch never overtakes the one before it. Copy and paste: the host sends `Ctrl/Cmd+C` as a `key` event and then, behind it, reads `/surface/clipboard`; it never sends the paste chord, it sends a `text` event with the pasted text instead. Every other key reaches you as pressed, including the host's own shortcuts, which stand down while the surface has focus.
 
 The types and paths are exported from `@openchamber/sdk` (`SURFACE_*`, `SurfaceInputEvent`, …). `examples/browser-provider-stub` also declares `surface: true` and paints its fake page with rectangles, so the viewer, the hand-off, and the input path can be seen working without a browser.

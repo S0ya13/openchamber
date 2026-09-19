@@ -40,7 +40,11 @@ const startingByGuest = new Map();
 export class GuestServiceError extends Error {
   /**
    * @param {string} message
-   * @param {'NO_SERVICE' | 'SERVICE_FAILED' | 'BAD_PATH' | 'BAD_METHOD' | 'DISABLED' | 'CANCELLED'} code
+   * @param {'NO_SERVICE' | 'SERVICE_FAILED' | 'REQUEST_FAILED' | 'BAD_PATH' | 'BAD_METHOD' | 'DISABLED' | 'CANCELLED'} code
+   * `SERVICE_FAILED` is a service that never became ready: nothing was sent
+   * to it. `REQUEST_FAILED` is a request that was sent and got no usable
+   * answer (timeout, dropped connection, unreadable body): the service may
+   * have acted on it.
    */
   constructor(message, code) {
     super(message);
@@ -625,7 +629,7 @@ export const openGuestServiceRequest = async ({
       throw new GuestServiceError('The request was cancelled.', 'CANCELLED');
     }
     runtime.status = 'failed';
-    throw new GuestServiceError('Guest service request failed.', 'SERVICE_FAILED');
+    throw new GuestServiceError('Guest service request failed.', 'REQUEST_FAILED');
   }
   // The body is still streaming when we return; the idle window starts once
   // the caller has read it (or dropped it), which is what `finished` marks.
@@ -651,7 +655,7 @@ export const proxyGuestServiceRequest = async ({ responseMax = GUEST_REQUEST_RES
     }
     const runtime = runtimes.get(params.guestId);
     if (runtime) runtime.status = 'failed';
-    throw new GuestServiceError('Guest service request failed.', 'SERVICE_FAILED');
+    throw new GuestServiceError('Guest service request failed.', 'REQUEST_FAILED');
   }
   finished();
   return {

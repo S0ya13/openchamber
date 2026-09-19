@@ -28,7 +28,6 @@ import { cn } from '@/lib/utils';
 type Props = { mode: PluginContextPanelMode };
 
 const RESIZE_DEBOUNCE_MS = 250;
-const CLIPBOARD_READ_DELAY_MS = 150;
 
 const modifiersOf = (event: { altKey: boolean; ctrlKey: boolean; metaKey: boolean; shiftKey: boolean }): SurfaceModifiers => ({
   alt: event.altKey,
@@ -53,9 +52,16 @@ export const GuestSurfacePane: React.FC<Props> = ({ mode }) => {
   const batchRef = React.useRef<SurfaceInputEvent[]>([]);
   const flushRef = React.useRef<number | null>(null);
   const clipboardRequestsRef = React.useRef(0);
+  /** A copy chord in the current batch: ask for the clipboard right after it. */
+  const clipboardAfterFlushRef = React.useRef(false);
+  const controlRef = React.useRef<SurfaceControlState>({ controller: 'none', mine: false });
 
   const [connection, setConnection] = React.useState<SurfaceConnectionState>({ status: 'connecting' });
-  const [control, setControl] = React.useState<SurfaceControlState>({ controller: 'none', mine: false });
+  const [control, setControlState] = React.useState<SurfaceControlState>({ controller: 'none', mine: false });
+  const setControl = React.useCallback((next: SurfaceControlState) => {
+    controlRef.current = next;
+    setControlState(next);
+  }, []);
   const [title, setTitle] = React.useState<string>('');
   const [agentActive, setAgentActive] = React.useState(false);
   const [hasFrame, setHasFrame] = React.useState(false);
@@ -106,7 +112,7 @@ export const GuestSurfacePane: React.FC<Props> = ({ mode }) => {
       frameSizeRef.current = null;
       setHasFrame(false);
     };
-  }, [active, drawFrame, guestId]);
+  }, [active, drawFrame, guestId, setControl]);
 
   // Tell the extension how much room the panel has, so a browser or a
   // simulator can lay itself out at that size instead of being scaled.
@@ -142,6 +148,14 @@ export const GuestSurfacePane: React.FC<Props> = ({ mode }) => {
       const events = batchRef.current;
       batchRef.current = [];
       clientRef.current?.sendInput(events);
+      // Sent on the same socket right after the batch; the host handles
+      // them in order, so the extension has done the copy by the time it
+      // is asked what was copied.
+      if (clipboardAfterFlushRef.current) {
+        clipboardAfterFlushRef.current = false;
+        clipboardRequestsRef.current += 1;
+        clientRef.current?.requestClipboard(`copy-${clipboardRequestsRef.current}`);
+      }
     });
   }, []);
 
@@ -159,6 +173,9 @@ export const GuestSurfacePane: React.FC<Props> = ({ mode }) => {
 
   const onPointer = (action: 'down' | 'up' | 'move') => (event: React.PointerEvent<HTMLCanvasElement>) => {
     if (!hasFrame) return;
+    // Hovering is looking, not acting: moves without a button go out only
+    // once the user holds control, so a glance never takes it from the agent.
+    if (action === 'move' && event.buttons === 0 && !(controlRef.current.controller === 'user' && controlRef.current.mine)) return;
     const point = framePoint(event);
     if (!point) return;
     if (action === 'down') {
@@ -195,12 +212,8 @@ export const GuestSurfacePane: React.FC<Props> = ({ mode }) => {
     }
     event.preventDefault();
     event.stopPropagation();
+    if (action === 'down' && isCopyChord(event)) clipboardAfterFlushRef.current = true;
     queue({ type: 'key', action, key: event.key, code: event.code, modifiers: modifiersOf(event) });
-    if (action === 'down' && isCopyChord(event)) {
-      clipboardRequestsRef.current += 1;
-      const id = `copy-${clipboardRequestsRef.current}`;
-      setTimeout(() => clientRef.current?.requestClipboard(id), CLIPBOARD_READ_DELAY_MS);
-    }
   };
 
   const onPaste = (event: React.ClipboardEvent<HTMLDivElement>) => {

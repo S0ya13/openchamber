@@ -148,7 +148,24 @@ export const createGuestSurfaceRuntime = ({
     ...params,
   });
 
-  const notifyService = async (session, controller) => {
+  /**
+   * Service calls that must land in order (input, control, resize, clipboard)
+   * run one after another per session: the socket delivers messages in
+   * order, and turning them into parallel HTTP requests would let a later
+   * batch reach the service before an earlier one. Work queued for an ended
+   * session is dropped, so closing a panel never starts the service again.
+   */
+  const enqueue = (session, task) => {
+    const run = session.queue.then(async () => {
+      if (session.ended) return;
+      await task();
+    }).catch(() => undefined);
+    session.queue = run;
+    return run;
+  };
+
+  const notifyService = async (session, controller, { evenIfEnded = false } = {}) => {
+    if (session.ended && !evenIfEnded) return;
     try {
       const { response, finished } = await serviceRequest(session, {
         method: 'POST',
@@ -169,7 +186,7 @@ export const createGuestSurfaceRuntime = ({
     for (const viewer of session.viewers.values()) {
       send(viewer, { type: 'control', controller: kind, mine: session.controller === viewer.id });
     }
-    void notifyService(session, kind);
+    void enqueue(session, () => notifyService(session, kind));
   };
 
   const clearAgentTimer = (session) => {
@@ -322,10 +339,16 @@ export const createGuestSurfaceRuntime = ({
       pumpAbort: null,
       releaseHold: holdService(guestId),
       ended: false,
+      queue: Promise.resolve(),
     };
     sessions.set(guestId, session);
     return session;
   };
+
+  /** Moving the pointer over the picture is looking, not acting. */
+  const isDeliberate = (events) => events.some((event) => (
+    event.type !== 'pointer' || event.action !== 'move' || event.buttons !== 0
+  ));
 
   const handleInput = async (session, viewer, events) => {
     if (session.controller !== viewer.id) {
@@ -334,6 +357,7 @@ export const createGuestSurfaceRuntime = ({
         send(viewer, { type: 'control', controller: 'user', mine: false });
         return;
       }
+      if (!isDeliberate(events)) return;
       setController(session, viewer.id);
     }
     try {
@@ -424,16 +448,18 @@ export const createGuestSurfaceRuntime = ({
         }
         return;
       case 'input':
-        void handleInput(session, viewer, message.events);
+        void enqueue(session, () => handleInput(session, viewer, message.events));
         return;
       case 'release':
         if (session.controller === viewer.id) setController(session, 'none');
         return;
       case 'resize':
-        void handleResize(session, viewer, message.width, message.height);
+        void enqueue(session, () => handleResize(session, viewer, message.width, message.height));
         return;
       case 'clipboard-read':
-        void handleClipboardRead(session, viewer, message.id);
+        // Queued behind the copy chord that preceded it, so the service has
+        // already handled the copy when it is asked what was copied.
+        void enqueue(session, () => handleClipboardRead(session, viewer, message.id));
         return;
     }
   };
@@ -455,15 +481,32 @@ export const createGuestSurfaceRuntime = ({
     });
     ws.on('close', () => {
       session.viewers.delete(viewer.id);
-      if (session.controller === viewer.id) setController(session, 'none');
-      if (session.viewers.size === 0 && !session.ended) {
-        // Nobody is watching: stop pulling frames and let the service idle out.
-        session.ended = true;
-        sessions.delete(guestId);
+      // An ended session (pause, removal, withdrawn approval, service gone)
+      // must not talk to the service again: that would start it back up
+      // with the authorization this session was opened under.
+      if (session.ended) return;
+      const held = session.controller === viewer.id;
+      if (held) {
+        session.controller = 'none';
         clearAgentTimer(session);
-        session.pumpAbort?.abort();
-        session.releaseHold?.();
+        for (const other of session.viewers.values()) send(other, { type: 'control', controller: 'none', mine: false });
       }
+      if (session.viewers.size > 0) {
+        if (held) void enqueue(session, () => notifyService(session, 'none'));
+        return;
+      }
+      // Nobody is watching: stop pulling frames and let the service idle out.
+      // The extension still learns the user let go, so its own automation
+      // can resume; this session's authorization is intact here, unlike the
+      // ended paths above.
+      const farewell = held
+        ? session.queue.then(() => notifyService(session, 'none', { evenIfEnded: true })).catch(() => undefined)
+        : Promise.resolve();
+      session.ended = true;
+      sessions.delete(guestId);
+      clearAgentTimer(session);
+      session.pumpAbort?.abort();
+      void farewell.finally(() => session.releaseHold?.());
     });
     ws.on('error', () => {
       try {

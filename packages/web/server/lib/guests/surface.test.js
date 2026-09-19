@@ -27,14 +27,23 @@ const createFakeService = () => {
   const frames = [];
   const waiters = [];
   let failWith = null;
+  /** Test hook: a promise the input handler awaits before answering. */
+  let inputGate = null;
   const pushFrame = (frame) => {
     frames.push(frame);
     for (const wake of waiters.splice(0)) wake();
   };
   const nextFrameAfter = (seq) => frames.find((frame) => frame.seq > seq) ?? null;
+  const completed = [];
   const openServiceRequest = async ({ path, method, body, query, signal }) => {
     calls.push({ path, method, body: body ? JSON.parse(body) : undefined, query });
     if (failWith) throw failWith;
+    if (path === SURFACE_INPUT_PATH && inputGate) {
+      const gate = inputGate;
+      inputGate = null;
+      await gate;
+    }
+    if (path === SURFACE_INPUT_PATH) completed.push(JSON.parse(body).events[0]);
     let response;
     if (path === SURFACE_FRAME_PATH) {
       const after = Number(query.after);
@@ -73,7 +82,9 @@ const createFakeService = () => {
   };
   return {
     calls,
+    completed,
     pushFrame,
+    gateNextInput: (promise) => { inputGate = promise; },
     fail: (error) => { failWith = error; for (const wake of waiters.splice(0)) wake(); },
     openServiceRequest,
     callsTo: (path) => calls.filter((call) => call.path === path),
@@ -281,6 +292,82 @@ describe('guest surface runtime', () => {
     expect(timers).toHaveLength(1);
     timers[0]();
     expect(await viewer.next()).toEqual({ type: 'control', controller: 'none', mine: false });
+  });
+
+  test('hovering over the picture does not take control; a click does', async () => {
+    const { port, service, runtime } = await createHarness();
+    const viewer = await openViewer(port);
+    await viewer.next(); await viewer.next();
+    const modifiers = { alt: false, ctrl: false, meta: false, shift: false };
+    viewer.send({ type: 'input', events: [{ type: 'pointer', action: 'move', x: 5, y: 5, button: -1, buttons: 0, modifiers }] });
+    await settle();
+    expect(runtime.userControls('sim')).toBe(false);
+    expect(service.callsTo(SURFACE_INPUT_PATH)).toHaveLength(0);
+
+    runtime.noteAgentActivity('sim');
+    expect(await viewer.next()).toMatchObject({ type: 'control', controller: 'agent' });
+    viewer.send({ type: 'input', events: [{ type: 'pointer', action: 'move', x: 6, y: 6, button: -1, buttons: 0, modifiers }] });
+    await settle();
+    expect(runtime.userControls('sim')).toBe(false);
+
+    viewer.send({ type: 'input', events: [{ type: 'pointer', action: 'down', x: 6, y: 6, button: 0, buttons: 1, modifiers }] });
+    expect(await viewer.next()).toEqual({ type: 'control', controller: 'user', mine: true });
+    // Now moves flow, as the holder's.
+    viewer.send({ type: 'input', events: [{ type: 'pointer', action: 'move', x: 7, y: 7, button: -1, buttons: 0, modifiers }] });
+    await settle();
+    expect(service.callsTo(SURFACE_INPUT_PATH)).toHaveLength(2);
+  });
+
+  test('input batches reach the service in socket order even when one is slow', async () => {
+    const { port, service } = await createHarness();
+    const viewer = await openViewer(port);
+    await viewer.next(); await viewer.next();
+    const modifiers = { alt: false, ctrl: false, meta: false, shift: false };
+    let open;
+    service.gateNextInput(new Promise((resolve) => { open = resolve; }));
+    viewer.send({ type: 'input', events: [{ type: 'key', action: 'down', key: 'a', code: 'KeyA', modifiers }] });
+    await viewer.next(); // control
+    viewer.send({ type: 'input', events: [{ type: 'key', action: 'down', key: 'b', code: 'KeyB', modifiers }] });
+    viewer.send({ type: 'clipboard-read', id: 'c1' });
+    await settle();
+    expect(service.completed).toHaveLength(0);
+    expect(service.callsTo(SURFACE_CLIPBOARD_PATH)).toHaveLength(0);
+    open();
+    expect(await viewer.next()).toEqual({ type: 'clipboard', id: 'c1', text: 'copied inside' });
+    expect(service.completed.map((event) => event.key)).toEqual(['a', 'b']);
+  });
+
+  test('a session ended while the user held control never talks to the service again', async () => {
+    const { port, service, runtime, holds } = await createHarness();
+    const viewer = await openViewer(port);
+    await viewer.next(); await viewer.next();
+    const modifiers = { alt: false, ctrl: false, meta: false, shift: false };
+    viewer.send({ type: 'input', events: [{ type: 'key', action: 'down', key: 'a', code: 'KeyA', modifiers }] });
+    expect(await viewer.next()).toMatchObject({ type: 'control', controller: 'user', mine: true });
+    await settle();
+    const callsBefore = service.calls.length;
+
+    // Approval withdrawn: the guest routes end the session; the socket closes after.
+    runtime.endForGuest('sim');
+    expect(await viewer.next()).toEqual({ type: 'ended', reason: 'extension-unavailable' });
+    await viewer.closed;
+    await settle();
+    expect(service.calls.length).toBe(callsBefore);
+    expect(holds[0].released).toBe(true);
+  });
+
+  test('the last viewer leaving while holding control tells the service it let go', async () => {
+    const { port, service } = await createHarness();
+    const viewer = await openViewer(port);
+    await viewer.next(); await viewer.next();
+    const modifiers = { alt: false, ctrl: false, meta: false, shift: false };
+    viewer.send({ type: 'input', events: [{ type: 'key', action: 'down', key: 'a', code: 'KeyA', modifiers }] });
+    await viewer.next();
+    await settle();
+    viewer.ws.close();
+    await viewer.closed;
+    await settle();
+    expect(service.callsTo(SURFACE_CONTROL_PATH).map((call) => call.body)).toEqual([{ controller: 'user' }, { controller: 'none' }]);
   });
 
   test('resize and clipboard reads round-trip through the service', async () => {

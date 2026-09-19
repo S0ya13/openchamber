@@ -22,6 +22,8 @@ const createRouter = ({
   guest = providerGuest(),
   serviceAnswer = { status: 200, body: JSON.stringify({ ok: true, data: { url: 'http://localhost:3000/', title: 'App' } }) },
   userControls = false,
+  readSettingsError = null,
+  findGuestError = null,
 } = {}) => {
   const brokerCalls = [];
   const proxied = [];
@@ -40,12 +42,18 @@ const createRouter = ({
         return { from: 'broker' };
       },
     },
-    readSettings: async () => current,
+    readSettings: async () => {
+      if (readSettingsError) throw readSettingsError;
+      return current;
+    },
     persistSettings: async (changes) => {
       persisted.push(changes);
       current = { ...current, ...changes };
     },
-    findGuest: async (id) => (guest && guest.id === id ? guest : null),
+    findGuest: async (id) => {
+      if (findGuestError) throw findGuestError;
+      return guest && guest.id === id ? guest : null;
+    },
     persistPath: '/data/extensions.json',
     emitProviderReset: (event) => resets.push(event),
     createId: () => 'req-1',
@@ -186,5 +194,38 @@ describe('browser control router', () => {
     const { router, agentActivity } = createRouter();
     await router.request('browser.snapshot', {});
     expect(agentActivity).toEqual(['server-chrome']);
+  });
+
+  test('a settings read that fails runs nothing anywhere and changes nothing', async () => {
+    const { router, brokerCalls, proxied, persisted, resets } = createRouter({ readSettingsError: new Error('disk') });
+    await expect(router.request('browser.click', { selector: '#save' })).rejects.toMatchObject({ status: 503 });
+    expect(brokerCalls).toHaveLength(0);
+    expect(proxied).toHaveLength(0);
+    expect(persisted).toHaveLength(0);
+    expect(resets).toHaveLength(0);
+  });
+
+  test('a catalog read that fails runs nothing anywhere and keeps the choice', async () => {
+    const { router, brokerCalls, proxied, persisted, resets } = createRouter({ findGuestError: new Error('catalog') });
+    await expect(router.request('browser.click', { selector: '#save' })).rejects.toMatchObject({ status: 503 });
+    expect(brokerCalls).toHaveLength(0);
+    expect(proxied).toHaveLength(0);
+    expect(persisted).toHaveLength(0);
+    expect(resets).toHaveLength(0);
+  });
+
+  test('a request that was sent and lost is reported as unknown, not as unchanged', async () => {
+    const { router } = createRouter({
+      serviceAnswer: new GuestServiceError('Guest service request failed.', 'REQUEST_FAILED'),
+    });
+    try {
+      await router.request('browser.click', { selector: '#save' });
+      throw new Error('expected rejection');
+    } catch (error) {
+      expect(error).toBeInstanceOf(BrowserControlError);
+      expect(error.status).toBe(504);
+      expect(error.message).toContain('may or may not have run');
+      expect(error.message).not.toContain('Nothing was changed');
+    }
   });
 });
