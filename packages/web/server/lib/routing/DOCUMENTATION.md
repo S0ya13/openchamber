@@ -38,7 +38,9 @@ Code has no OpenChamber server and never offers Auto.
 
 - The sentinel never reaches OpenCode. OpenCode 2.x holds the model and agent
   on the session and a prompt body carries only the user's text, so Auto is
-  per-session state: `POST /api/session/:id/model` with the sentinel is
+  per-session state: `POST /api/session` drops the sentinel from the create
+  body (the session starts on OpenCode's default; the first send switches it),
+  `POST /api/session/:id/model` with the sentinel is
   swallowed and marks the session (`noteModelSelection`), and every
   `POST /api/session/:id/{prompt,command}` in a marked session is routed
   (`routeSend`) and switches the session onto the answer before the send is
@@ -85,6 +87,6 @@ debounced saves and manages the key.
 `store.test.js` (defaults, deviation round-trip, deleted built-ins, malformed
 file, token file mode), `runtime.test.js` (request text, excerpts, decisions,
 rewrite and fallback paths, safety net hold/skip/off), `routes.http.test.js`
-(sentinel swallowed on the model switch, routed send ahead of a stand-in proxy,
+(sentinel dropped from a create and swallowed on the model switch, routed send ahead of a stand-in proxy,
 routes, flag off). The queue and
 auto-accept tests cover their hooks.

@@ -21,6 +21,7 @@ import express from 'express';
 import { isRoutingFeatureAvailable } from './feature-flag.js';
 import { isAutoModel } from './defaults.js';
 
+const CREATE_PATH = '/api/session';
 const MODEL_PATH = '/api/session/:sessionId/model';
 const SEND_PATHS = [
   '/api/session/:sessionId/prompt',
@@ -92,14 +93,28 @@ export function registerRoutingPromptRewrite(app, runtime) {
     return url.searchParams.get('directory') || req.get('x-opencode-directory') || undefined;
   };
 
+  const refuseAuto = (res) => res.status(400).json({ error: 'Auto routing is not available on this server. Choose a model.' });
+
+  // Session creation is the other v2 request that carries a model: flows that
+  // know their first turn's selection create the session on it (btw forks,
+  // auto review, fusion, extension starts). OpenCode accepts the sentinel at
+  // creation and only fails the first prompt with "provider.no-route", so the
+  // model is dropped here and the session starts on OpenCode's default. No
+  // session id exists yet to mark; the first send resends the sentinel through
+  // the model switch below because the session's record never matches Auto.
+  app.post(CREATE_PATH, withParsedBody((req, res, next) => {
+    if (!isAutoModel(req.body?.model)) return next();
+    if (!isRoutingFeatureAvailable()) return refuseAuto(res);
+    delete req.body.model;
+    next();
+  }, { always: true }));
+
   // The sentinel is inspected even without the flag: a client that still holds
   // an `openchamber/auto` selection from another build must get a readable
   // refusal here, never OpenCode's "provider.no-route" after the switch lands.
   app.post(MODEL_PATH, withParsedBody((req, res, next) => {
     if (!isRoutingFeatureAvailable()) {
-      if (isAutoModel(req.body?.model)) {
-        return res.status(400).json({ error: 'Auto routing is not available on this server. Choose a model.' });
-      }
+      if (isAutoModel(req.body?.model)) return refuseAuto(res);
       return next();
     }
     const directory = directoryOf(req);

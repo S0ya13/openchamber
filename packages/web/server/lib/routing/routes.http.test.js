@@ -66,6 +66,19 @@ describe('routing send rewrite', () => {
     expect(runtime.isAutoSession('s1')).toBe(true);
   });
 
+  it('drops the Auto sentinel from a session create so OpenCode never stores it', async () => {
+    const { app, forwarded, runtime } = createApp();
+    await request(app)
+      .post('/api/session?directory=%2Frepo')
+      .send({ title: 'btw', model: { providerID: 'openchamber', id: 'auto' }, agent: 'build' })
+      .expect(204);
+    expect(forwarded).toEqual([{ path: '/session', parsed: true, body: { title: 'btw', agent: 'build' } }]);
+    expect(runtime.noteModelSelection).not.toHaveBeenCalled();
+
+    await request(app).post('/api/session').send({ model: { providerID: 'anthropic', id: 'claude-opus-5' } }).expect(204);
+    expect(forwarded[1]).toEqual({ path: '/session', parsed: true, body: { model: { providerID: 'anthropic', id: 'claude-opus-5' } } });
+  });
+
   it('forwards a real model switch untouched and takes the session off Auto', async () => {
     const { app, forwarded, runtime } = createApp();
     await request(app).post('/api/session/s1/model').send({ model: { providerID: 'openchamber', id: 'auto' } }).expect(204);
@@ -110,6 +123,10 @@ describe('routing send rewrite', () => {
     expect(response.body.error).toMatch(/not available/);
     expect(forwarded).toEqual([]);
     expect(runtime.noteModelSelection).not.toHaveBeenCalled();
+
+    const create = await request(app).post('/api/session').send({ model: { providerID: 'openchamber', id: 'auto' } });
+    expect(create.status).toBe(400);
+    expect(forwarded).toEqual([]);
 
     await request(app).post('/api/session/s1/model').send({ model: { providerID: 'anthropic', id: 'claude-opus-5' } }).expect(204);
     expect(forwarded).toEqual([{ path: '/session/s1/model', parsed: true, body: { model: { providerID: 'anthropic', id: 'claude-opus-5' } } }]);

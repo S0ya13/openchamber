@@ -37,6 +37,7 @@ import { getRegisteredRuntimeAPIs } from "@/contexts/runtimeAPIRegistry"
 import { markStartupTrace } from "@/lib/startupTrace"
 import { assertProviderCircuitClosed, recordProviderError, recordProviderSuccess } from "./provider-tracker"
 import { normalizePath } from "@/lib/pathNormalization"
+import { isAutoModel } from "@/lib/routing/autoModel"
 import { activeSessionSnapshotSchema, hostSessionStatusSnapshotSchema, type HostSessionStatusSnapshot } from "./session-status"
 import {
   compact,
@@ -763,7 +764,10 @@ class OpencodeService {
         id: params?.id,
         title: params?.title,
         agent: params?.agent,
-        model: params?.model,
+        // Auto is OpenChamber's sentinel, not a model OpenCode can start a
+        // session on; the first send puts the session on Auto through the
+        // model switch the server intercepts.
+        model: params?.model && isAutoModel(params.model.providerID, params.model.id) ? undefined : params?.model,
         location: requestDirectory ? { directory: requestDirectory } : undefined,
         metadata: params?.metadata,
       }),
