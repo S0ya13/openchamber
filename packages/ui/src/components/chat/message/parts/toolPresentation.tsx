@@ -39,6 +39,9 @@ export const getToolIcon = (toolName: string, presentation?: GuestToolRule | nul
     if (tool === 'read' || tool === 'view' || tool === 'file_read' || tool === 'cat') {
         return <Icon name="file-text" className={iconClass} />;
     }
+    if (tool === 'execute') {
+        return <Icon name="braces" className={iconClass} />;
+    }
     if (tool === 'shell' || tool === 'bash' || tool === 'cmd' || tool === 'terminal') {
         return <Icon name="terminal-box" className={iconClass} />;
     }

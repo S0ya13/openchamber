@@ -1,6 +1,7 @@
 import React from 'react';
 import { useChatColumnSession } from '@/components/chat/chatColumnSession';
 import type { Message, ModelRef, Part, ReasoningPart, TextPart, ToolPart } from '@/lib/opencode/model';
+import { executeToolCalls, isExecuteTool } from '@/lib/opencode/tools';
 
 import type { MessageStreamPhase } from '@/stores/types/sessionTypes';
 import { useSessionUIStore } from '@/sync/session-ui-store';
@@ -86,6 +87,7 @@ const TOOL_STATUS_PHRASES = new Map(Object.entries({
     patch: 'applying patch',
     'file-diff': 'reading changes',
     shell: 'running command',
+    execute: 'running a script',
     grep: 'searching content',
     glob: 'finding files',
     subagent: 'delegating task',
@@ -123,6 +125,21 @@ const getToolStatusPhrase = (toolName: string): string => {
     return TOOL_STATUS_PHRASES.get(toolName) ?? `using ${toolName}`;
 };
 
+/**
+ * A running `execute` (Code Mode) script names the tool it is calling as soon
+ * as its metadata lists one, so the pill tracks the script's real work instead
+ * of sitting on a generic phrase for its whole run.
+ */
+const getRunningToolPhrase = (part: ToolPart, toolName: string): string => {
+    if (!isExecuteTool(toolName)) {
+        return getToolStatusPhrase(toolName);
+    }
+    const state = part.state;
+    const calls = executeToolCalls(state && 'metadata' in state ? state.metadata : undefined);
+    const last = calls[calls.length - 1];
+    return last ? `calling ${last.tool}` : getToolStatusPhrase(toolName);
+};
+
 const hashString = (value: string): number => {
     let hash = 0;
     for (let index = 0; index < value.length; index += 1) {
@@ -138,6 +155,7 @@ const getStableWorkingPhrase = (key: string): string => {
 const createParsedStatus = (parts: Part[], genericKey: string): ParsedStatusResult => {
     let activePartType: ParsedStatusResult['activePartType'] = undefined;
     let activeToolName: string | undefined = undefined;
+    let activeToolPhrase: string | undefined = undefined;
 
     for (let index = parts.length - 1; index >= 0; index -= 1) {
         const part = parts[index];
@@ -162,6 +180,7 @@ const createParsedStatus = (parts: Part[], genericKey: string): ParsedStatusResu
                     } else {
                         activePartType = 'tool';
                         activeToolName = toolName;
+                        activeToolPhrase = getRunningToolPhrase(part, toolName);
                     }
                 }
                 break;
@@ -185,7 +204,7 @@ const createParsedStatus = (parts: Part[], genericKey: string): ParsedStatusResu
     const isGenericStatus = activePartType === undefined;
     const statusText = (() => {
         if (activePartType === 'editing') return activeToolName === 'multiedit' ? getToolStatusPhrase(activeToolName) : 'editing file';
-        if (activePartType === 'tool' && activeToolName) return getToolStatusPhrase(activeToolName);
+        if (activePartType === 'tool' && activeToolName) return activeToolPhrase ?? getToolStatusPhrase(activeToolName);
         if (activePartType === 'reasoning') return 'thinking';
         if (activePartType === 'text') return 'composing';
         return getStableWorkingPhrase(genericKey);

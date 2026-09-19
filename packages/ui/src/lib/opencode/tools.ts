@@ -25,6 +25,7 @@ import type { Metadata, ToolInput } from "./model"
 /** Built-in tool names as the server reports them. */
 export const OPENCODE_TOOLS = {
   edit: "edit",
+  execute: "execute",
   glob: "glob",
   grep: "grep",
   patch: "patch",
@@ -60,6 +61,12 @@ export function normalizeToolName(toolName: ToolName): string {
 const is = (name: OpencodeToolName) => (toolName: ToolName): boolean => normalizeToolName(toolName) === name
 
 export const isShellTool = is(OPENCODE_TOOLS.shell)
+/**
+ * Code Mode: one tool that runs a short JS script which calls the MCP and
+ * integration tools as functions. The script is `input.code`; what it actually
+ * called is `metadata.toolCalls`.
+ */
+export const isExecuteTool = is(OPENCODE_TOOLS.execute)
 export const isSubagentTool = is(OPENCODE_TOOLS.subagent)
 export const isQuestionTool = is(OPENCODE_TOOLS.question)
 export const isSkillTool = is(OPENCODE_TOOLS.skill)
@@ -119,6 +126,7 @@ const inputSchema = z
     pattern: optionalText,
     query: optionalText,
     url: optionalText,
+    code: optionalText,
     questions: z.array(z.unknown()).optional().catch(undefined),
   })
   .catch({})
@@ -131,12 +139,29 @@ const fileDiffSchema = z.object({
   status: z.enum(["added", "deleted", "modified"]).optional().catch(undefined),
 })
 
+/**
+ * One entry of an `execute` call's `metadata.toolCalls`. `input` is the
+ * argument object the script passed; it is kept as compact JSON text because
+ * the only consumer renders it on one line.
+ */
+const executeToolCallSchema = z.object({
+  tool: optionalText,
+  status: optionalText,
+  input: z.unknown().optional().catch(undefined),
+})
+
+/** A call's raw arguments before serialization: free-form JSON the script passed. */
+type ExecuteToolCallInput = z.infer<typeof executeToolCallSchema>["input"]
+
 const metadataSchema = z
   .object({
     files: z.array(fileDiffSchema.nullable().catch(null)).optional().catch(undefined),
     sessionID: optionalText,
     sessionId: optionalText,
     name: optionalText,
+    toolCalls: z.array(executeToolCallSchema.nullable().catch(null)).optional().catch(undefined),
+    truncated: z.boolean().optional().catch(undefined),
+    outputPath: optionalText,
   })
   .catch({})
 
@@ -170,6 +195,69 @@ export function toolFileDiffs(metadata: Metadata | undefined): ToolFileDiff[] {
   return files.filter((entry): entry is ToolFileDiff => entry !== null && entry.file !== undefined)
 }
 
+/** A tool an `execute` script called, as the row and the expanded body show it. */
+export type ExecuteToolCall = {
+  tool: string
+  /** `completed`, `error`, or whatever else the runtime reported. */
+  status?: string
+  /** The call arguments as compact one-line JSON, absent when there were none. */
+  input?: string
+}
+
+const MAX_EXECUTE_CALL_INPUT_LENGTH = 160
+
+/**
+ * The tools an `execute` script called, in order. Entries without a tool name
+ * are dropped rather than failing the list, so one malformed call cannot erase
+ * the other calls of the same script.
+ */
+export function executeToolCalls(metadata: Metadata | undefined): ExecuteToolCall[] {
+  const calls = metadataSchema.parse(metadata ?? {}).toolCalls ?? []
+  const parsed: ExecuteToolCall[] = []
+  for (const call of calls) {
+    if (!call?.tool) continue
+    const entry: ExecuteToolCall = { tool: call.tool }
+    if (call.status) entry.status = call.status
+    const json = stringifyOrUndefined(call.input)
+    // JSON.stringify never emits a raw newline, so the arguments are already
+    // one line; empty arguments say nothing and are left off the row.
+    if (json && json !== "{}" && json !== "null") {
+      entry.input =
+        json.length > MAX_EXECUTE_CALL_INPUT_LENGTH
+          ? `${json.slice(0, MAX_EXECUTE_CALL_INPUT_LENGTH)}\u2026`
+          : json
+    }
+    parsed.push(entry)
+  }
+  return parsed
+}
+
+/** `JSON.stringify` that answers `undefined` for anything it cannot serialize. */
+function stringifyOrUndefined(value: ExecuteToolCallInput): string | undefined {
+  if (value === undefined || value === null) return undefined
+  try {
+    return JSON.stringify(value)
+  } catch {
+    return undefined
+  }
+}
+
+/**
+ * Where OpenCode wrote an `execute` result it had to cut short, or `null` when
+ * the row shows the whole output. The path is shown as plain text: the app has
+ * no open-file affordance for a path outside the project.
+ */
+export function executeOutputTruncation(metadata: Metadata | undefined): { outputPath?: string } | null {
+  const parsed = metadataSchema.parse(metadata ?? {})
+  if (!parsed.truncated) return null
+  return parsed.outputPath ? { outputPath: parsed.outputPath } : {}
+}
+
+/** The script an `execute` call ran (`input.code`). */
+export function executeScript(input: ToolInput | undefined): string | undefined {
+  return readInput(input).code
+}
+
 /** The child session a `subagent` call runs in (`metadata.sessionID`). */
 export function subagentSessionId(metadata: Metadata | undefined): string | undefined {
   const parsed = metadataSchema.parse(metadata ?? {})
@@ -195,14 +283,35 @@ export type ToolDescription =
   | { kind: "text"; value: string }
   | { kind: "questions"; count: number }
   | { kind: "files"; count: number }
+  /** An `execute` script, described by the tools it called. */
+  | { kind: "tools"; calls: Array<{ name: string; count: number }>; overflow: number }
 
 const MAX_COMMAND_LENGTH = 100
+/** How many distinct tools an `execute` row names before it counts the rest. */
+const MAX_DESCRIBED_TOOL_CALLS = 4
 const MAX_TEXT_LENGTH = 120
 
 const text = (value: string | undefined): ToolDescription | null =>
   value ? { kind: "text", value: value.slice(0, MAX_TEXT_LENGTH) } : null
 
 const asPath = (value: string | undefined): ToolDescription | null => (value ? { kind: "path", value } : null)
+
+/**
+ * The tools an `execute` script called, deduplicated in first-seen order with
+ * a repeat count, capped so a long script still fits one row. While the script
+ * runs — or when it called nothing — the row falls back to its first line.
+ */
+function describeExecute(calls: ExecuteToolCall[], code: string | undefined): ToolDescription | null {
+  const counts = new Map<string, number>()
+  for (const call of calls) {
+    counts.set(call.tool, (counts.get(call.tool) ?? 0) + 1)
+  }
+  if (counts.size === 0) {
+    return code ? { kind: "text", value: code.split("\n")[0].slice(0, MAX_COMMAND_LENGTH) } : null
+  }
+  const named = [...counts].slice(0, MAX_DESCRIBED_TOOL_CALLS).map(([name, count]) => ({ name, count }))
+  return { kind: "tools", calls: named, overflow: counts.size - named.length }
+}
 
 /**
  * Derives the row description from v2 data alone: no state carries a title any
@@ -220,6 +329,9 @@ export function toolDescription(
   switch (name) {
     case OPENCODE_TOOLS.shell:
       return parsed.command ? { kind: "text", value: parsed.command.split("\n")[0].slice(0, MAX_COMMAND_LENGTH) } : null
+
+    case OPENCODE_TOOLS.execute:
+      return describeExecute(executeToolCalls(metadata), parsed.code)
 
     // "A short 3-5 word label for the task, displayed to the user".
     case OPENCODE_TOOLS.subagent:

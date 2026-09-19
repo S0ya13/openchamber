@@ -76,7 +76,11 @@ import { useStreamingTextThrottle } from '../../hooks/useStreamingTextThrottle';
 import { getStreamingOutputAppend, getToolOutput } from './toolOutput';
 import { toAbsoluteFilePath } from '@/lib/path-utils';
 import {
+    executeOutputTruncation,
+    executeScript,
+    executeToolCalls,
     isEditTool,
+    isExecuteTool,
     isReadTool,
     isFileChangeTool,
     isPatchTool,
@@ -408,7 +412,10 @@ const getToolDescriptionPath = (part: ToolPartType, state: ToolStateUnion, curre
     return getRelativePath(described.value, currentDirectory);
 };
 
-type DescriptionTranslate = (key: 'chat.toolPart.questionsAsked' | 'chat.toolPart.filesCount', params: { count: number }) => string;
+type DescriptionTranslate = (
+    key: 'chat.toolPart.questionsAsked' | 'chat.toolPart.filesCount' | 'chat.toolPart.moreToolCalls',
+    params: { count: number },
+) => string;
 
 /** Localized text for a tool description; paths are made relative to the project. */
 const describeTool = (described: ToolDescription | null, currentDirectory: string, t: DescriptionTranslate): string => {
@@ -422,6 +429,14 @@ const describeTool = (described: ToolDescription | null, currentDirectory: strin
             return t('chat.toolPart.questionsAsked', { count: described.count });
         case 'files':
             return t('chat.toolPart.filesCount', { count: described.count });
+        case 'tools': {
+            const named = described.calls
+                .map(({ name, count }) => (count > 1 ? `${name} \u00d7${count}` : name))
+                .join(', ');
+            return described.overflow > 0
+                ? `${named}, ${t('chat.toolPart.moreToolCalls', { count: described.overflow })}`
+                : named;
+        }
     }
 };
 
@@ -1199,11 +1214,20 @@ const ToolExpandedContent: React.FC<ToolExpandedContentProps> = React.memo(({
         [currentDirectory, diffContent, metadata]
     );
     const hasVisualDiffEntry = diffEntries.some((entry) => entry.renderMode === 'diff');
+    // `execute` renders its script and its call list itself, below.
     const hideToolInputPreview = part.tool === 'openchamber'
         || part.tool === 'openchamber_web'
         || part.tool === 'openchamber_memory'
         || isPatchTool(part.tool)
-        || isEditTool(part.tool);
+        || isEditTool(part.tool)
+        || isExecuteTool(part.tool);
+    const isExecute = isExecuteTool(part.tool);
+    const executeCode = React.useMemo(() => (isExecute ? executeScript(input) : undefined), [input, isExecute]);
+    const executeCalls = React.useMemo(() => (isExecute ? executeToolCalls(metadata) : []), [isExecute, metadata]);
+    const executeTruncation = React.useMemo(
+        () => (isExecute ? executeOutputTruncation(metadata) : null),
+        [isExecute, metadata],
+    );
     const diagnosticSection = React.useMemo(
         () => getToolDiagnosticSection(part.tool, input, metadata, currentDirectory),
         [currentDirectory, input, metadata, part.tool],
@@ -1524,6 +1548,50 @@ const ToolExpandedContent: React.FC<ToolExpandedContentProps> = React.memo(({
                 renderResultContent()
             ) : (
                 <>
+                    {isExecute ? (
+                        <div className="my-1 space-y-2">
+                            {executeCode ? renderScrollableBlock(
+                                <WorkerHighlightedCode
+                                    language="javascript"
+                                    code={executeCode}
+                                    style={TOOL_COLLAPSED_CUSTOM_STYLE}
+                                    codeStyle={CODE_TAG_PROPS.style}
+                                    wrap
+                                />,
+                                { maxHeightClass: 'max-h-60', className: 'tool-input-surface' },
+                            ) : null}
+                            {executeCalls.length > 0 ? (
+                                <div>
+                                    <div className="typography-meta font-medium text-muted-foreground/80 mb-1">
+                                        {t('chat.toolPart.scriptCalls')}
+                                    </div>
+                                    <ul className="space-y-0.5">
+                                        {executeCalls.map((call, index) => (
+                                            <li key={`${call.tool}-${index}`} className="flex min-w-0 items-baseline gap-2">
+                                                <span
+                                                    className="typography-code flex-shrink-0"
+                                                    style={call.status === 'error' ? TOOL_ERROR_TITLE_STYLE : undefined}
+                                                >
+                                                    {call.tool}
+                                                </span>
+                                                {call.status && call.status !== 'error' && call.status !== 'completed' ? (
+                                                    <span className="typography-micro flex-shrink-0 text-muted-foreground/70">
+                                                        {call.status}
+                                                    </span>
+                                                ) : null}
+                                                {call.input ? (
+                                                    <span className="typography-meta truncate text-muted-foreground/70">
+                                                        {call.input}
+                                                    </span>
+                                                ) : null}
+                                            </li>
+                                        ))}
+                                    </ul>
+                                </div>
+                            ) : null}
+                        </div>
+                    ) : null}
+
                     {hasInputText ? (
                         <div className="my-1">
                             {renderScrollableBlock(
@@ -1561,6 +1629,12 @@ const ToolExpandedContent: React.FC<ToolExpandedContentProps> = React.memo(({
                                 </div>
                             ) : null}
                             {renderResultContent()}
+                            {executeTruncation ? (
+                                <div className="typography-meta mt-1 text-muted-foreground/70">
+                                    {t('chat.toolPart.outputTruncated')}
+                                    {executeTruncation.outputPath ? ` \u2014 ${executeTruncation.outputPath}` : ''}
+                                </div>
+                            ) : null}
                         </div>
                     )}
 

@@ -66,6 +66,17 @@ const TOOL_METADATA: Record<string, ToolMetadata> = {
     ]
   },
 
+  // OpenCode 2 Code Mode: one tool whose input is a short JS script that calls
+  // the MCP and integration tools as functions.
+  execute: {
+    displayName: 'Script',
+    category: 'code',
+    outputLanguage: 'json',
+    inputFields: [
+      { key: 'code', label: 'Script', type: 'code', language: 'javascript' }
+    ]
+  },
+
   shell: {
     displayName: 'Shell Command',
     category: 'system',

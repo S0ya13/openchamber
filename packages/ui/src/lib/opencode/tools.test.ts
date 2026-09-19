@@ -3,6 +3,9 @@ import { describe, expect, test } from "bun:test"
 import {
   blocksOnForm,
   carriesFileDiffs,
+  executeOutputTruncation,
+  executeScript,
+  executeToolCalls,
   isExplorationTool,
   isFileChangeTool,
   isShellTool,
@@ -108,11 +111,79 @@ describe("tool row description", () => {
       .toEqual({ kind: "questions", count: 1 })
   })
 
+  test("execute names the tools the script called, deduplicated and counted", () => {
+    expect(toolDescription("execute", { code: "await linear.list_issues()" }, {
+      toolCalls: [
+        { tool: "linear.list_issues", status: "completed", input: { teamId: "OPE" } },
+        { tool: "linear.list_issues", status: "error", input: {} },
+        { tool: "linear.list_issues", status: "completed", input: {} },
+        { tool: "linear.get_workspace", status: "completed" },
+      ],
+    })).toEqual({
+      kind: "tools",
+      calls: [{ name: "linear.list_issues", count: 3 }, { name: "linear.get_workspace", count: 1 }],
+      overflow: 0,
+    })
+  })
+
+  test("execute caps the named tools and counts the rest", () => {
+    const toolCalls = ["a", "b", "c", "d", "e", "f"].map((tool) => ({ tool, status: "completed" }))
+    expect(toolDescription("execute", {}, { toolCalls })).toEqual({
+      kind: "tools",
+      calls: [
+        { name: "a", count: 1 },
+        { name: "b", count: 1 },
+        { name: "c", count: 1 },
+        { name: "d", count: 1 },
+      ],
+      overflow: 2,
+    })
+  })
+
+  test("execute falls back to the first line of the script while it has called nothing", () => {
+    expect(toolDescription("execute", { code: "const issues = await linear.list_issues()\nreturn issues" }, {}))
+      .toEqual({ kind: "text", value: "const issues = await linear.list_issues()" })
+    expect(toolDescription("execute", { code: "x".repeat(140) }, undefined))
+      .toEqual({ kind: "text", value: "x".repeat(100) })
+    expect(toolDescription("execute", {}, undefined)).toBe(null)
+  })
+
   test("MCP tools fall back to their own description, then a path", () => {
     expect(toolDescription("linear_get_issue", { description: "Fetch OPE-199" }, undefined))
       .toEqual({ kind: "text", value: "Fetch OPE-199" })
     expect(toolDescription("custom_tool", { path: "notes.md" }, undefined))
       .toEqual({ kind: "path", value: "notes.md" })
     expect(toolDescription("custom_tool", {}, undefined)).toBe(null)
+  })
+})
+
+describe("execute call details", () => {
+  test("keeps order and status, serializes the input on one line, drops nameless calls", () => {
+    expect(executeToolCalls({
+      toolCalls: [
+        { tool: "search", status: "completed", input: { query: "a\nb" } },
+        { status: "error", input: {} },
+        { tool: "openchamber_memory", status: "error" },
+        { tool: "noop", status: "completed", input: {} },
+      ],
+    })).toEqual([
+      { tool: "search", status: "completed", input: '{"query":"a\\nb"}' },
+      { tool: "openchamber_memory", status: "error" },
+      { tool: "noop", status: "completed" },
+    ])
+    expect(executeToolCalls({})).toEqual([])
+  })
+
+  test("reports truncation only when the tool said so", () => {
+    expect(executeOutputTruncation({ truncated: true, outputPath: "/tmp/out.json" }))
+      .toEqual({ outputPath: "/tmp/out.json" })
+    expect(executeOutputTruncation({ truncated: true })).toEqual({})
+    expect(executeOutputTruncation({ outputPath: "/tmp/out.json" })).toBe(null)
+    expect(executeOutputTruncation(undefined)).toBe(null)
+  })
+
+  test("reads the script off the input", () => {
+    expect(executeScript({ code: "return 1" })).toBe("return 1")
+    expect(executeScript({})).toBe(undefined)
   })
 })
