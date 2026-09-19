@@ -442,13 +442,19 @@ describe('guest surface runtime', () => {
     expect(holds[0].released).toBe(true);
   });
 
-  test('resize and clipboard reads round-trip through the service', async () => {
+  test('resize and clipboard reads round-trip through the service; clipboard needs control', async () => {
     const { port, service } = await createHarness();
     const viewer = await openViewer(port);
     await viewer.next(); await viewer.next();
     viewer.send({ type: 'resize', width: 800, height: 600 });
     expect(await viewer.next()).toEqual({ type: 'resized', width: 640, height: 400 });
     expect(service.callsTo(SURFACE_RESIZE_PATH)[0].body).toEqual({ width: 800, height: 600 });
+    viewer.send({ type: 'clipboard-read', id: 'c0' });
+    expect(await viewer.next()).toMatchObject({ type: 'error', code: 'NOT_CONTROLLING' });
+    expect(service.callsTo(SURFACE_CLIPBOARD_PATH)).toHaveLength(0);
+    const modifiers = { alt: false, ctrl: false, meta: false, shift: false };
+    viewer.send({ type: 'input', events: [{ type: 'key', action: 'down', key: 'c', code: 'KeyC', modifiers: { ...modifiers, meta: true } }] });
+    await viewer.next();
     viewer.send({ type: 'clipboard-read', id: 'c1' });
     expect(await viewer.next()).toEqual({ type: 'clipboard', id: 'c1', text: 'copied inside' });
   });

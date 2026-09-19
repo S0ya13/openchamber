@@ -228,4 +228,16 @@ describe('browser control router', () => {
       expect(error.message).not.toContain('Nothing was changed');
     }
   });
+
+  test('a settings read that fails during deactivation is logged, not raised', async () => {
+    const { router, persisted } = createRouter({ readSettingsError: new Error('disk') });
+    const warn = console.warn;
+    console.warn = () => undefined;
+    try {
+      expect(await router.handleGuestDeactivated({ guestId: 'server-chrome', guestName: 'Server Chrome' })).toBe(false);
+    } finally {
+      console.warn = warn;
+    }
+    expect(persisted).toHaveLength(0);
+  });
 });

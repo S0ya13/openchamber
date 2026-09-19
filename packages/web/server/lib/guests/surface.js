@@ -412,6 +412,12 @@ export const createGuestSurfaceRuntime = ({
   };
 
   const handleClipboardRead = async (session, viewer, id) => {
+    // What was copied inside the surface belongs to whoever is driving it;
+    // a viewer that only watches gets nothing, like every other input path.
+    if (session.controller !== viewer.id) {
+      send(viewer, { type: 'error', code: 'NOT_CONTROLLING', message: 'Take control of the surface to copy from it.' });
+      return;
+    }
     try {
       const { response, finished } = await serviceRequest(session, {
         method: 'GET',

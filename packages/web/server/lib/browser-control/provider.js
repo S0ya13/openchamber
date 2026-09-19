@@ -197,10 +197,18 @@ export const createBrowserControlRouter = ({
      * the selection alone decides.
      */
     async handleGuestDeactivated({ guestId, guestName }) {
-      const providerId = await selectedProviderId();
-      if (providerId !== guestId) return false;
-      await resetToBuiltin({ guestId, guestName: guestName || guestId });
-      return true;
+      // The pause or removal already happened; a failure here must not turn
+      // it into an error response. The next action re-checks the catalog
+      // and resets the setting then.
+      try {
+        const providerId = await selectedProviderId();
+        if (providerId !== guestId) return false;
+        await resetToBuiltin({ guestId, guestName: guestName || guestId });
+        return true;
+      } catch (error) {
+        console.warn('[browser-provider] could not reset the provider after a deactivation:', error instanceof Error ? error.message : error);
+        return false;
+      }
     },
   };
 };
