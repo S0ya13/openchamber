@@ -1865,8 +1865,6 @@ export const dict: Record<I18nKey, string> = {
   'diffView.actions.enableLineWrap': 'Włącz zawijanie linii',
   'diffView.actions.expandAll': 'Rozwiń wszystko',
   'diffView.actions.collapseAll': 'Zwiń wszystko',
-  'diffView.actions.loadFullFiles': 'Wczytaj pełne pliki',
-  'diffView.actions.disableFullFiles': 'Nie wczytuj pełnych plików',
   'diffView.actions.openFileAtFirstChangedLine': 'Otwórz plik na pierwszej zmienionej linii',
   'diffView.actions.review': 'Review',
   'diffView.actions.reviewAria': 'Przejrzyj zmiany',

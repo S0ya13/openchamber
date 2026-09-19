@@ -2155,6 +2155,24 @@ const applyUpstreamConfiguration = async (args) => {
   );
 };
 
+/**
+ * A repository whose root is the user's home directory or a filesystem root
+ * (`C:\`, `/`) covers the whole disk. Every status read walks Program Files
+ * or the entire home tree, which is minutes of Git work per refresh and, on
+ * Windows, the process pile-ups users report. Such a repository is nearly
+ * always an accidental `git init` in the wrong place, so OpenChamber treats
+ * it as no repository at all. Returns the reason or null for a normal root.
+ */
+export const unsupportedRepositoryRootReason = (repoRoot, home = os.homedir()) => {
+  if (typeof repoRoot !== 'string' || !repoRoot.trim()) return null;
+  const resolved = path.resolve(repoRoot.trim());
+  if (path.resolve(path.parse(resolved).root) === resolved) return 'filesystem-root';
+  if (typeof home === 'string' && home.trim() && path.resolve(home.trim()) === resolved) return 'home';
+  return null;
+};
+
+const warnedUnsupportedRoots = new Set();
+
 export async function isGitRepository(directory) {
   const directoryPath = normalizeDirectoryPath(directory);
   if (!directoryPath || !fs.existsSync(directoryPath)) {
@@ -2162,7 +2180,20 @@ export async function isGitRepository(directory) {
   }
 
   const result = await runGitCommand(directoryPath, ['rev-parse', '--git-dir'], { timeoutMs: GIT_PROBE_TIMEOUT_MS });
-  return result.success;
+  if (!result.success) return false;
+
+  // `--show-toplevel` has no answer inside a bare repository or a .git
+  // directory; those keep the previous answer rather than being rejected.
+  const topLevel = await runGitCommand(directoryPath, ['rev-parse', '--show-toplevel'], { timeoutMs: GIT_PROBE_TIMEOUT_MS });
+  if (!topLevel.success) return true;
+  const repoRoot = topLevel.stdout.trim();
+  const reason = unsupportedRepositoryRootReason(repoRoot);
+  if (!reason) return true;
+  if (!warnedUnsupportedRoots.has(repoRoot)) {
+    warnedUnsupportedRoots.add(repoRoot);
+    console.warn(`[git] Ignoring repository rooted at ${repoRoot} (${reason}): Git features are disabled for ${directoryPath}`);
+  }
+  return false;
 }
 
 export async function getGlobalIdentity() {
@@ -2303,6 +2334,25 @@ const GIT_UNTRACKED_LISTING_STALL_TIMEOUT_MS = 60_000;
 const GIT_PROBE_TIMEOUT_MS = 30_000;
 
 // Untracked files under `dirPath` (repository-relative, trailing slash), read
+// Git for Windows runs commands through a launcher: the `git.exe` we spawn is a
+// wrapper whose child is the real `git`. Killing only the wrapper leaves that
+// child alive, still walking the tree on its own (a repository rooted at a
+// drive root sends it through Program Files), and it shows up in Task Manager
+// as a stuck pair until someone ends it by hand. Windows has no process groups
+// to signal, so the tree is ended through taskkill.
+const killProcessTree = (child) => {
+  if (!child.pid) return;
+  if (process.platform === 'win32') {
+    try {
+      spawn('taskkill', ['/pid', String(child.pid), '/T', '/F'], { windowsHide: true, stdio: 'ignore' }).on('error', () => {});
+    } catch {
+      child.kill('SIGKILL');
+    }
+    return;
+  }
+  child.kill('SIGKILL');
+};
+
 // from a streamed `ls-files` that is stopped once the bound is exceeded so a
 // huge directory is never listed in full. `paths` is complete when
 // `truncated` is false.
@@ -2335,7 +2385,7 @@ const listUntrackedFilesBounded = async (repoRoot, dirPath, limit) => {
     const armStallTimer = () => {
       if (stallTimer) clearTimeout(stallTimer);
       stallTimer = setTimeout(() => {
-        child.kill('SIGKILL');
+        killProcessTree(child);
         finish(new Error(`git ls-files produced no output for ${GIT_UNTRACKED_LISTING_STALL_TIMEOUT_MS}ms in ${dirPath}`));
       }, GIT_UNTRACKED_LISTING_STALL_TIMEOUT_MS);
     };
@@ -2351,7 +2401,7 @@ const listUntrackedFilesBounded = async (repoRoot, dirPath, limit) => {
         paths.push(record);
         if (paths.length > limit) {
           truncated = true;
-          child.kill();
+          killProcessTree(child);
           finish();
           return;
         }

@@ -533,6 +533,58 @@ describe('openchamber session routes', () => {
     expect(sessionSwitchAgentMock).toHaveBeenCalledWith({ sessionID: 'ses_123', agent: 'build' });
   });
 
+  it('resolves an Auto default through the routing hook before switching the session', async () => {
+    useCatalog();
+    const resolveAutoSelection = vi.fn(async () => ({
+      model: { providerID: 'openai', id: 'gpt-5.5', variant: 'high' },
+      agent: 'plan',
+      decision: {},
+    }));
+    const { app } = createApp({
+      readSettingsFromDiskMigrated: async () => ({
+        defaultModel: 'openchamber/auto',
+        defaultAgent: 'build',
+        projects: [{ id: 'proj_1', path: '/repo/app' }],
+      }),
+      resolveAutoSelection,
+    });
+    const response = await request(app)
+      .post('/api/openchamber/sessions')
+      .send({ directory: '/repo/app', prompt: 'Run this' })
+      .expect(200);
+
+    expect(resolveAutoSelection).toHaveBeenCalledWith({
+      sessionId: 'ses_123',
+      directory: '/repo/app',
+      model: { providerID: 'openchamber', id: 'auto' },
+      agent: 'build',
+      requestText: 'Run this',
+    });
+    expect(response.body.model).toEqual({ providerID: 'openai', modelID: 'gpt-5.5' });
+    expect(response.body.agent).toBe('plan');
+    expect(sessionSwitchModelMock).toHaveBeenCalledWith({
+      sessionID: 'ses_123',
+      model: { id: 'gpt-5.5', providerID: 'openai', variant: 'high' },
+    });
+    expect(sessionSwitchAgentMock).toHaveBeenCalledWith({ sessionID: 'ses_123', agent: 'plan' });
+  });
+
+  it('refuses an Auto default when routing is not wired in', async () => {
+    useCatalog();
+    const { app } = createApp({
+      readSettingsFromDiskMigrated: async () => ({
+        defaultModel: 'openchamber/auto',
+        projects: [{ id: 'proj_1', path: '/repo/app' }],
+      }),
+    });
+    const response = await request(app)
+      .post('/api/openchamber/sessions')
+      .send({ directory: '/repo/app', prompt: 'Run this' });
+    expect(response.status).toBe(400);
+    expect(response.body.error).toMatch(/not available/);
+    expect(sessionSwitchModelMock).not.toHaveBeenCalled();
+  });
+
   it.each([
     ['', { projectId: 'proj_1' }],
     ['', { directory: '/repo/app', worktree: { name: 'side-task' } }],

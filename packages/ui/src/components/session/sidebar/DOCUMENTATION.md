@@ -163,7 +163,10 @@ matching and ordering. Search does not fetch sessions or broaden list membership
 - Rename drafts stay parent-owned, while editing and menu lifecycles are keyed
   by row occurrence. Duplicate Recent, project, and folder rows never open a
   second rename input, and the owning occurrence remains mounted through menu
-  close completion.
+  close completion. `useSessionRowMenuState` keeps the shared open-menu key
+  pinned until close completion while a local close request drives the
+  controlled `open` prop; a controlled menu whose `open` follows the pinned key
+  never closes, so its deferred rename never starts.
 - Folder drops carry occurrence drag keys and owner-scoped targets. A drop is
   accepted only when the current model marks every owner scope complete and
   the source and target owner match. Archived rows and archived targets never

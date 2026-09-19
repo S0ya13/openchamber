@@ -37,6 +37,7 @@ import { useViewportStore, viewportSessionKey } from '@/sync/viewport-store';
 import { DraggableSessionRow } from '../folders/sessionFolderDnd';
 import { useSessionRowOrderRegistry } from './sessionRowOrder';
 import { canShowSessionWorktreeMenu, getSessionWorktreeMenuDisabled, nodeContainsSessionId, nodeHasPinnedMembershipChange, selectFormBadgeSessionScopes, selectRowBadgeVisibilityClass } from './sessionNodeItemUtils';
+import { useSessionRowMenuState } from './useSessionRowMenuState';
 import type { SessionNode } from '../types';
 import { formatProjectLabel, formatSessionCompactDateLabel, formatSessionDateLabel, normalizePath, renderHighlightedText } from '../utils';
 import { useProjectsStore } from '@/stores/useProjectsStore';
@@ -521,11 +522,28 @@ function SessionNodeItemComponent(props: SessionNodeItemProps): React.ReactNode 
   const sessionTimestamp = resolvedSession.time?.updated || resolvedSession.time?.created || Date.now();
   const sessionUpdatedLabel = formatSessionDateLabel(sessionTimestamp);
   const sessionCompactUpdatedLabel = formatSessionCompactDateLabel(sessionTimestamp);
-  const isMenuOpen = openSidebarMenuKey === menuInstanceKey;
-  const [legacyContextMenuOpen, setLegacyContextMenuOpen] = React.useState(false);
-  const isContextMenuOpen = contextMenuInstanceKey
-    ? openSidebarMenuKey === contextMenuInstanceKey
-    : legacyContextMenuOpen;
+  const {
+    isMenuOpen,
+    isContextMenuOpen,
+    handleMenuOpenChange,
+    handleContextMenuOpenChange,
+    handleMenuOpenChangeComplete,
+    toggleMenu,
+  } = useSessionRowMenuState({
+    menuInstanceKey,
+    contextMenuInstanceKey,
+    openSidebarMenuKey,
+    setOpenSidebarMenuKey,
+    hasDeferredCloseWork: () => pendingRenameRef.current !== null,
+    onCloseComplete: () => {
+      if (!pendingRenameRef.current) return;
+      const { id, title } = pendingRenameRef.current;
+      pendingRenameRef.current = null;
+      setEditingId(id);
+      setEditingRowKey(sessionRowKey);
+      setEditTitle(title);
+    },
+  });
   const isSessionMenuOpen = isMenuOpen || isContextMenuOpen;
   const isMultiRunLikeSession = React.useMemo(() => getMultiRunIdentity(resolvedSession) !== null, [resolvedSession]);
   const [fusionDialogOpen, setFusionDialogOpen] = React.useState(false);
@@ -839,46 +857,10 @@ function SessionNodeItemComponent(props: SessionNodeItemProps): React.ReactNode 
     ? <Icon name="error-warning" className="h-4 w-4 text-status-warning" />
     : null;
 
-  const handleMenuOpenChange = (open: boolean) => {
-    if (open) {
-      setLegacyContextMenuOpen(false);
-      setOpenSidebarMenuKey(menuInstanceKey);
-      return;
-    }
-    if (!pendingRenameRef.current && openSidebarMenuKey === menuInstanceKey) {
-      setOpenSidebarMenuKey(null);
-    }
-  };
-
-  const handleMenuOpenChangeComplete = (open: boolean) => {
-    if (!open && pendingRenameRef.current) {
-      const { id, title } = pendingRenameRef.current;
-      pendingRenameRef.current = null;
-      setEditingId(id);
-      setEditingRowKey(sessionRowKey);
-      setEditTitle(title);
-    }
-    if (!open && (openSidebarMenuKey === menuInstanceKey || openSidebarMenuKey === contextMenuInstanceKey)) {
-      setOpenSidebarMenuKey(null);
-    }
-  };
-
-  const handleContextMenuOpenChange = (open: boolean) => {
-    if (!contextMenuInstanceKey) {
-      setLegacyContextMenuOpen(open);
-      return;
-    }
-    if (open) {
-      setOpenSidebarMenuKey(contextMenuInstanceKey);
-    } else if (!pendingRenameRef.current && openSidebarMenuKey === contextMenuInstanceKey) {
-      setOpenSidebarMenuKey(null);
-    }
-  };
-
   const handleMenuTriggerClick = (event: React.MouseEvent<HTMLButtonElement>) => {
     event.preventDefault();
     event.stopPropagation();
-    setOpenSidebarMenuKey(isMenuOpen ? null : menuInstanceKey);
+    toggleMenu();
   };
 
   const handleMenuTriggerPointerDown = (event: React.PointerEvent<HTMLButtonElement>) => {

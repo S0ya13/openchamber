@@ -1,3 +1,17 @@
+## [1.24.2] - 2026-09-18
+
+### Fixes
+
+- **Startup:** opening OpenChamber no longer starts MCP servers and background work for every saved project and worktree, preventing runaway memory use (thanks to @knorby).
+- Chat: malformed Markdown stays readable as plain text without crashing the chat.
+- Chat: switching agents respects each agent's pinned model and thinking level (thanks to @maxiedaniels).
+- Chat: context usage reflects the model that wrote the latest answer.
+- Sessions: Rename closes the session menu and opens the name field again (thanks to @karimodm).
+- Agent Manager: renamed multi-run sessions keep their group, and separate launches with the same label stay separate (thanks to @yulia-ivashko).
+- Worktrees: Enter creates a worktree once from the branch or directory field; confirming text with an input method doesn't create it early.
+- Chat: math formulas use the correct KaTeX fonts (thanks to @Dawnfz-Lenfeng).
+- Themes: Catppuccin dark and light consistently use the Mocha and Latte palettes (thanks to @gbPagano).
+
 ## [1.24.1] - 2026-09-18
 
 ### New

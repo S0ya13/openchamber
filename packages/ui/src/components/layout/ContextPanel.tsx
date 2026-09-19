@@ -60,8 +60,11 @@ import { isVimEditorEventTarget } from '@/lib/editorFocus';
 import { isTerminalEventTarget } from '@/lib/terminalFocus';
 
 const CONTEXT_PANEL_MIN_WIDTH = 320;
-const CONTEXT_PANEL_MAX_WIDTH = 1400;
 const CONTEXT_PANEL_DEFAULT_WIDTH = 600;
+// The panel has no absolute pixel ceiling: on large monitors the user may
+// want it nearly full-width (side-by-side diffs with the chat open). The
+// only limit during a drag is leaving the chat column this much width.
+const CONTEXT_CHAT_MIN_WIDTH = 400;
 const RESIZE_FOLLOW_INTERVAL_MS = 100;
 const CONTEXT_TAB_LABEL_MAX_CHARS = 24;
 type TranslateFn = ReturnType<typeof useI18n>['t'];
@@ -88,12 +91,20 @@ const normalizeDirectoryKey = (value: string): string => {
   return normalized;
 };
 
-const clampWidth = (width: number): number => {
+const clampWidth = (width: number, maxWidth: number): number => {
   if (!Number.isFinite(width)) {
     return CONTEXT_PANEL_DEFAULT_WIDTH;
   }
 
-  return Math.min(CONTEXT_PANEL_MAX_WIDTH, Math.max(CONTEXT_PANEL_MIN_WIDTH, Math.round(width)));
+  return Math.min(maxWidth, Math.max(CONTEXT_PANEL_MIN_WIDTH, Math.round(width)));
+};
+
+// Ceiling derived from the space the panel actually shares with the chat:
+// everything except a minimum chat column, never below the panel minimum.
+const maxPanelWidth = (availableWidth?: number | null): number => {
+  const base = availableWidth
+    ?? (typeof window !== 'undefined' ? window.innerWidth : CONTEXT_PANEL_DEFAULT_WIDTH * 2);
+  return Math.max(CONTEXT_PANEL_MIN_WIDTH, base - CONTEXT_CHAT_MIN_WIDTH);
 };
 
 const getAvailablePanelWidth = (panel: HTMLElement | null): number | null => {
@@ -525,7 +536,7 @@ export const ContextPanel: React.FC = () => {
     : manualWidth;
   const width = isTreeOnly
     ? contextEditorTreeWidth
-    : clampWidth(effectiveManualWidth ?? Math.round(widthFraction * widthFallbackBase));
+    : clampWidth(effectiveManualWidth ?? Math.round(widthFraction * widthFallbackBase), maxPanelWidth(availablePanelAreaWidth ?? widthFallbackBase));
 
   // Convert legacy pixel-only preferences to a ratio the first time the
   // available area is known, so existing users also get responsive sizing.
@@ -611,8 +622,8 @@ export const ContextPanel: React.FC = () => {
   }, []);
 
   const clampWidthForDrag = React.useCallback((nextWidth: number) => {
-    const clamped = isTreeOnly ? clampContextEditorTreeWidth(nextWidth) : clampWidth(nextWidth);
     const available = resizeAvailableWidthRef.current;
+    const clamped = isTreeOnly ? clampContextEditorTreeWidth(nextWidth) : clampWidth(nextWidth, maxPanelWidth(available));
     return available === null ? clamped : Math.min(clamped, Math.max(1, available));
   }, [isTreeOnly]);
 

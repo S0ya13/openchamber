@@ -15,7 +15,7 @@ import {
 } from '@/components/ui/dropdown-menu';
 
 import { useUIStore, type ContextPanelMode } from '@/stores/useUIStore';
-import { useConfigStore } from '@/stores/useConfigStore';
+import { useContextWindowLimits } from '@/hooks/useContextWindowLimits';
 import { useSessionUIStore } from '@/sync/session-ui-store';
 import { useSessionWorktreeStore } from '@/sync/session-worktree-store';
 import { formatSessionWorktreeBadge } from '@/sync/session-worktree-contract';
@@ -281,8 +281,6 @@ export const Header: React.FC = () => {
   const shortcutOverrides = useUIStore((state) => state.shortcutOverrides);
   const sessionTabsEnabled = useUIStore((state) => state.sessionTabsEnabled);
 
-  const getCurrentModel = useConfigStore((state) => state.getCurrentModel);
-
   const getContextUsage = useSessionUIStore((state) => state.getContextUsage);
   const isNewSessionDraftOpen = useSessionUIStore((state) => Boolean(state.newSessionDraft?.open));
   const currentSessionId = useSessionUIStore((state) => state.currentSessionId);
@@ -384,12 +382,7 @@ export const Header: React.FC = () => {
     setIsDesktopApp(isDesktopShell());
   }, []);
 
-  const currentModel = getCurrentModel();
-  const limit = currentModel && typeof currentModel.limit === 'object' && currentModel.limit !== null
-    ? (currentModel.limit as Record<string, unknown>)
-    : null;
-  const contextLimit = (limit && typeof limit.context === 'number' ? limit.context : 0);
-  const outputLimit = (limit && typeof limit.output === 'number' ? limit.output : 0);
+  const { context: contextLimit, output: outputLimit } = useContextWindowLimits(currentSessionId);
   const contextUsage = getContextUsage(contextLimit, outputLimit);
   const [stableDesktopContextUsage, setStableDesktopContextUsage] = React.useState<SessionContextUsage | null>(null);
   const isContextUsageResolvedForSession = !currentSessionId || currentSessionMessagesResolved;

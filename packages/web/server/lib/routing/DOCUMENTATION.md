@@ -47,7 +47,10 @@ Code has no OpenChamber server and never offers Auto.
   forwarded. Both sit ahead of the generic proxy, which replays a parsed body.
   The message queue calls `resolveAutoSelection` itself and applies the answer
   with the model/agent switches it already makes. Without a fallback model the
-  runtime throws 400 rather than forwarding.
+  runtime throws 400 rather than forwarding. The OpenChamber session service
+  (`openchamber-sessions/routes.js`) talks to OpenCode through the SDK and can
+  pick Auto up from Session Defaults, so it calls `resolveAutoSelection` itself
+  before switching the session.
 - The mark lives in process memory. A server restart between the model switch
   and the next send drops it (see the TODO in `runtime.js`).
 - Every failure keeps the user's own behaviour. A Jev error, timeout, unknown

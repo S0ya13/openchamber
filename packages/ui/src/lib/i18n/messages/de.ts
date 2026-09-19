@@ -1462,8 +1462,6 @@ export const dict = {
   'diffView.actions.renderAnyway': 'Trotzdem rendern',
   'diffView.actions.expandAll': 'Alle erweitern',
   'diffView.actions.collapseAll': 'Alle reduzieren',
-  'diffView.actions.loadFullFiles': 'Vollständige Dateien laden',
-  'diffView.actions.disableFullFiles': 'Vollständige Dateien entladen',
   'diffView.actions.disableLineWrap': 'Zeilenumbruch deaktivieren',
   'diffView.actions.enableLineWrap': 'Zeilenumbruch aktivieren',
   'diffView.actions.openFileInEditorAtChange': 'Diese Datei im Editor bei der Änderung öffnen',

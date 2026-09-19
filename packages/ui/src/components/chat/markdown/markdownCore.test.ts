@@ -105,6 +105,41 @@ describe('markdown sanitization', () => {
 
 });
 
+describe('Markdown parser failures', () => {
+  // Real parser recursion overflow, rather than a mocked parse failure.
+  const source = `${'> '.repeat(20000)}<img src=x onerror="alert(1)"> & text\n  **unfinished`;
+  const fallback = `<div class="whitespace-pre-wrap break-words">${escapeRawMarkdownHtml(source)}</div>`;
+
+  test('preserves source as inert text on first paint in both image modes', () => {
+    expect(renderMarkdownSync(source, 'inline')).toBe(fallback);
+    expect(renderMarkdownSync(source, 'label')).toBe(fallback);
+    expect(renderMarkdownSync('**healthy**')).toContain('<strong>healthy</strong>');
+  });
+
+  test('keeps streaming and settled rendering readable and caches the settled fallback', async () => {
+    resetMarkdownHtmlCacheForTests();
+    for (const streaming of [true, false]) {
+      const blocks = await renderMarkdownBlocks(source, streaming);
+      expect(blocks).toHaveLength(1);
+      expect(blocks[0]?.html).toBe(fallback);
+    }
+    expect(getCachedMarkdownBlocks(source)?.[0]?.html).toBe(fallback);
+    const healthy = await renderMarkdownBlocks('**still healthy**', false);
+    expect(healthy[0]?.html).toContain('<strong>still healthy</strong>');
+  });
+
+  test('keeps images from other messages when one message cannot be scanned', () => {
+    expect(extractMarkdownImageCandidates([
+      '![before](https://example.test/before.png)',
+      source,
+      '![after](https://example.test/after.png)',
+    ])).toEqual([
+      { source: 'https://example.test/before.png', filename: 'before.png' },
+      { source: 'https://example.test/after.png', filename: 'after.png' },
+    ]);
+  });
+});
+
 describe('Markdown disclosures', () => {
   test('renders summaries and rich Markdown without allowing raw HTML attributes', () => {
     const html = renderMarkdownSync('<details open><summary>Review **ready**</summary>\n\n> Quoted review\n\n1. First\n2. Second\n\n```sh\nbun test\n```\n\n</details>\n\nAfter');
@@ -485,4 +520,3 @@ describe('Dollar math rendering', () => {
     expect(multi.match(/katex-display/g)).toHaveLength(2);
   });
 });
-

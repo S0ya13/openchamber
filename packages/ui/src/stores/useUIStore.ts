@@ -220,7 +220,11 @@ const isLegacyDefaultTemplates = (value: unknown): boolean => {
 
 const CONTEXT_PANEL_DEFAULT_WIDTH = 380;
 const CONTEXT_PANEL_MIN_WIDTH = 320;
-const CONTEXT_PANEL_MAX_WIDTH = 1400;
+/** Persistence sanity bound only: the real ceiling is responsive
+ * (widthFractionByMode, capped by available area minus a minimum chat
+ * width in ContextPanel), so a wide monitor may legitimately store a
+ * width far beyond any fixed pixel value. */
+const CONTEXT_PANEL_MAX_PERSISTED_WIDTH = 10000;
 /** Per surface, not per panel: see clampContextPanelTabs. */
 const CONTEXT_PANEL_MAX_TABS = 12;
 const CONTEXT_PANEL_MAX_LABEL_LENGTH = 120;
@@ -255,7 +259,7 @@ const clampContextPanelWidth = (width: number): number => {
     return CONTEXT_PANEL_DEFAULT_WIDTH;
   }
 
-  return Math.min(CONTEXT_PANEL_MAX_WIDTH, Math.max(CONTEXT_PANEL_MIN_WIDTH, Math.round(width)));
+  return Math.min(CONTEXT_PANEL_MAX_PERSISTED_WIDTH, Math.max(CONTEXT_PANEL_MIN_WIDTH, Math.round(width)));
 };
 
 const normalizeContextTargetPath = (value: string | null | undefined): string | null => {

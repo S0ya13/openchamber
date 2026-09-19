@@ -103,7 +103,14 @@ const getMarkdownImageCandidates = (markdown: string): MarkdownImageCandidate[] 
     return cached.candidates;
   }
 
-  const candidates = scanMarkdownImageCandidates(markdown);
+  let candidates: MarkdownImageCandidate[];
+  try {
+    candidates = scanMarkdownImageCandidates(markdown);
+  } catch {
+    // Image discovery is optional; a malformed message must not hide the chat
+    // or prevent discovery in the other messages.
+    return [];
+  }
   const bytes = estimateMarkdownImageCandidateCacheEntryBytes(markdown, candidates);
   if (bytes > MARKDOWN_IMAGE_CANDIDATE_CACHE_MAX_ENTRY_BYTES) return candidates;
 
@@ -698,9 +705,18 @@ export const getCachedMarkdownBlocks = (
   return rendered;
 };
 
+const renderPlainText = (text: string): string =>
+  `<div class="whitespace-pre-wrap break-words">${escapeRawMarkdownHtml(text)}</div>`;
+
 const parseBlock = async (block: MarkdownBlock, imageMode: MarkdownImageMode): Promise<string> => {
   const parser = imageMode === 'label' ? imageLabelParser : inlineImageParser;
-  const parsed = await Promise.resolve(parser.parse(block.src));
+  let parsed: string;
+  try {
+    parsed = await parser.parse(block.src);
+  } catch {
+    // Preserve the original source, not the syntax repaired for streaming.
+    return renderPlainText(block.raw);
+  }
   const withMath = renderMathExpressions(parsed);
   const highlighted = block.highlight ? await highlightCodeBlocks(withMath) : withMath;
   return sanitize(highlighted);
@@ -721,7 +737,12 @@ export const renderMarkdownSync = (
 ): string => {
   if (!text) return '';
   const parser = imageMode === 'label' ? imageLabelParser : inlineImageParser;
-  const parsed = parser.parse(text) as string;
+  let parsed: string;
+  try {
+    parsed = parser.parse(text, { async: false });
+  } catch {
+    return renderPlainText(text);
+  }
   const withMath = renderMathExpressions(parsed);
   return sanitize(withMath);
 };

@@ -5,6 +5,8 @@ import { Window } from 'happy-dom';
 import { create } from 'zustand';
 import { ThemeSystemContext, type ThemeContextValue } from '@/contexts/theme-system-context';
 import { getThemeById } from '@/lib/theme/themes';
+import { AUTO_MODEL_ID, AUTO_PROVIDER_ID, isAutoModel } from '@/lib/routing/autoModel';
+import { useRoutingStore } from '@/stores/useRoutingStore';
 
 /**
  * Restoring a session must not invent an effort choice.
@@ -509,6 +511,37 @@ describe('ModelControls effort restore', () => {
       await cleanup();
     }
   });
+
+  for (const ready of [true, false]) {
+    test(`a saved Auto ${ready ? 'wins over' : 'is not overwritten by'} the model history ran on`, async () => {
+      latestUserChoice = { id: 'msg-1', agent: AGENT, providerID: PROVIDER_ID, modelID: MODEL_ID, variant: undefined };
+      const selections = useSelectionStore.getState();
+      // Picking Auto records it for the session and for the agent alike.
+      const auto = { providerId: AUTO_PROVIDER_ID, modelId: AUTO_MODEL_ID };
+      const getSaved = spyOn(selections, 'getSessionModelSelection');
+      const getAgentSaved = spyOn(selections, 'getAgentModelForSession');
+      getSaved.mockReturnValue(auto);
+      getAgentSaved.mockReturnValue(auto);
+      const saveModel = spyOn(selections, 'saveSessionModelSelection');
+      useRoutingStore.setState({ available: ready, autoReady: ready });
+      const { cleanup } = await renderModelControls();
+      try {
+        const { currentProviderId, currentModelId } = useConfigStore.getState();
+        if (ready) {
+          expect([currentProviderId, currentModelId]).toEqual([AUTO_PROVIDER_ID, AUTO_MODEL_ID]);
+        } else {
+          expect([currentProviderId, currentModelId]).toEqual([PROVIDER_ID, MODEL_ID]);
+        }
+        // History must never replace the saved Auto, ready or not.
+        expect(saveModel.mock.calls.some(([, providerId, modelId]) => !isAutoModel(providerId, modelId))).toBe(false);
+      } finally {
+        await cleanup();
+        for (const spy of [getSaved, getAgentSaved, saveModel]) spy.mockRestore();
+        useSelectionStore.setState(selections);
+        useRoutingStore.setState({ available: false, autoReady: false });
+      }
+    });
+  }
 
   for (const savedVariant of ['high', null]) {
     test(`a saved effort choice wins over older message history: ${savedVariant}`, async () => {

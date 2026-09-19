@@ -1621,8 +1621,6 @@ export const dict = {
   'diffView.actions.renderAnyway': 'Yine de render et',
   'diffView.actions.expandAll': 'Tümünü genişlet',
   'diffView.actions.collapseAll': 'Tümünü daralt',
-  'diffView.actions.loadFullFiles': 'Dosyaların tamamını yükle',
-  'diffView.actions.disableFullFiles': 'Tam dosya yüklemeyi durdur',
   'diffView.actions.disableLineWrap': 'Satır kaydırmayı devre dışı bırak',
   'diffView.actions.enableLineWrap': 'Satır kaydırmayı etkinleştir',
   'diffView.actions.openFileInEditorAtChange': 'Bu dosyayı değişiklik konumunda editörde aç',

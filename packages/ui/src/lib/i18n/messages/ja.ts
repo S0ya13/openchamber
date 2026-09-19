@@ -1649,8 +1649,6 @@ export const dict: Record<I18nKey, string> = {
   'diffView.actions.renderAnyway': 'とにかくレンダリング',
   'diffView.actions.expandAll': 'すべて展開',
   'diffView.actions.collapseAll': 'すべて折りたたむ',
-  'diffView.actions.loadFullFiles': '全ファイルを読み込む',
-  'diffView.actions.disableFullFiles': '全ファイルの読み込みを解除',
   'diffView.actions.disableLineWrap': '行の折り返しを無効にする',
   'diffView.actions.enableLineWrap': '行の折り返しを有効にする',
   'diffView.actions.openFileInEditorAtChange': '変更箇所でファイルをエディターで開く',

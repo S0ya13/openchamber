@@ -6,6 +6,7 @@ import {
   resolvePrimaryWorktreeRoot,
 } from '../git/index.js';
 import { expandSnippets } from '../opencode/snippets.js';
+import { AUTO_MODEL_REF, isAutoModel } from '../routing/defaults.js';
 import { parseScheduledCommandPrompt } from '../scheduled-tasks/runtime.js';
 import { buildGoalIntroText, createSessionGoal } from '../session-goal/create.js';
 import { OpenChamberControlError, asControlError } from '../openchamber-control/error.js';
@@ -392,6 +393,11 @@ export const createOpenChamberSessionService = (dependencies) => {
     createOpenCodeClient = defaultCreateOpenCodeClient,
     createWorktree = createWorktreeDefault,
     getWorktreeBootstrapStatus = getWorktreeBootstrapStatusDefault,
+    // Auto routing. Sessions dispatched here talk to OpenCode through the SDK,
+    // not through the proxy that intercepts the Auto sentinel, so a default of
+    // `openchamber/auto` (Session Defaults) is resolved here before the
+    // session is switched onto it. Null when routing is not wired in.
+    resolveAutoSelection = null,
   } = dependencies;
 
   if ((!injectedArchiveStore || !injectedSessionMetadataStore) && !dataDir) {
@@ -527,6 +533,23 @@ export const createOpenChamberSessionService = (dependencies) => {
     }
 
     const expandedPrompt = expandSnippets(prompt, directory);
+    if (isAutoModel(model)) {
+      // The sentinel must never reach OpenCode: neither the goal record nor the
+      // session switch below may carry it.
+      if (!resolveAutoSelection) {
+        throw new OpenChamberControlError('Auto routing is not available on this server. Choose a model.', 400);
+      }
+      const routed = await resolveAutoSelection({
+        sessionId: sessionID,
+        directory,
+        model: AUTO_MODEL_REF,
+        agent: agent ?? null,
+        requestText: expandedPrompt,
+      });
+      model = { providerID: routed.model.providerID, modelID: routed.model.id };
+      variant = routed.model.variant ?? undefined;
+      agent = routed.agent || agent;
+    }
     const parsedCommand = parseScheduledCommandPrompt(prompt);
     let resolvedCommand = null;
     if (parsedCommand) {

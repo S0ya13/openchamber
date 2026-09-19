@@ -30,6 +30,7 @@ import { getRuntimeKey } from '@/lib/runtime-switch';
 import type { RoutingCategory, RoutingConfig } from '@/lib/routing/routingApi';
 import { useConfigStore } from '@/stores/useConfigStore';
 import { parseModelIdentifier } from '@/lib/modelIdentifier';
+import { isAutoModel } from '@/lib/routing/autoModel';
 import { useRoutingStore } from '@/stores/useRoutingStore';
 
 const DEFAULT_VARIANT_VALUE = '__default__';
@@ -254,7 +255,8 @@ export const RoutingPage: React.FC = () => {
   React.useEffect(() => {
     if (prefilledRef.current || !loaded || !serverConfig || serverConfig.fallback) return;
     const parsed = parseModelIdentifier(settingsDefaultModel);
-    if (!parsed) return;
+    // A default of Auto is what this fallback exists to resolve; nothing to prefill from it.
+    if (!parsed || isAutoModel(parsed.providerId, parsed.modelId)) return;
     prefilledRef.current = true;
     update((config) => (config.fallback ? config : {
       ...config,

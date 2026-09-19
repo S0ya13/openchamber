@@ -930,11 +930,21 @@ export const ModelControls: React.FC<ModelControlsProps> = ({
             return;
         }
 
-        // Manual session override wins over historical / synthetic message metadata.
+        // History can never say "Auto": the server replaces the sentinel with
+        // a real model before OpenCode stores the message. A saved Auto is the
+        // newer truth, so it wins over the model the last turn actually ran on.
+        // Until the routing state has loaded, Auto cannot be applied yet, so
+        // the restore stays pending instead of letting history overwrite it.
         const savedSessionModel = getSessionModelSelection(currentSessionId);
-        if (savedSessionModel && isStaleAutoSelection(savedSessionModel.providerId, savedSessionModel.modelId)) {
+        const savedAuto = Boolean(savedSessionModel) && isAutoModel(savedSessionModel!.providerId, savedSessionModel!.modelId);
+        if (savedAuto && isStaleAutoSelection(savedSessionModel!.providerId, savedSessionModel!.modelId)) {
             // Auto saved under a server that could route; this one cannot.
             useConfigStore.getState().dropStaleAutoSelection();
+        } else if (savedAuto) {
+            if (!autoReady) return;
+            tryApplyModelSelection(AUTO_PROVIDER_ID, AUTO_MODEL_ID, currentAgentName || undefined);
+            latestLoadedUserChoiceRestoreRef.current = restoreKey;
+            return;
         } else if (shouldPreserveManualModelOverride({
             selectionSource: useConfigStore.getState().selectionSource,
             savedSessionModel,
@@ -1003,8 +1013,10 @@ export const ModelControls: React.FC<ModelControlsProps> = ({
         hasRenderableCurrentSessionSnapshot,
         latestLoadedUserChoice,
         sessionRecordChoice,
+        autoReady,
         setAgent,
         applyModelSelectionWithVariant,
+        tryApplyModelSelection,
         getAgentModelVariantForSession,
         getModelVariantOptions,
         getSessionModelSelection,
