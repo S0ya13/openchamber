@@ -25,6 +25,8 @@ import { getCurrentIntlLocale, useI18n } from '@/lib/i18n';
 import { runtimeFetch } from '@/lib/runtime-fetch';
 import { opencodeClient } from '@/lib/opencode/client';
 import type { IntegrationInfo } from '@opencode/client';
+import type { Provider } from '@/lib/opencode/model';
+import { z } from 'zod';
 import { requiresProviderAuth, shouldLoadAvailableProviders } from './providerAvailability';
 import {
   providerHasCredentials,
@@ -137,11 +139,13 @@ const parseProvidersPayload = (payload: unknown): ProviderOption[] => {
 
 /**
  * An API key written straight into the provider entry. OpenCode 2 keeps request
- * settings under `settings`; v1 called the same block `options`.
+ * settings under `settings`, an open record whose typed keys (timeout,
+ * compaction, transport since 2.0.10) never include the key itself, so it is
+ * read as a free-form entry and kept only when it is a string.
  */
-const readProviderApiKeySetting = (
-  provider: { settings?: { apiKey?: string | null }; options?: { apiKey?: string | null } } | undefined,
-): string | null => provider?.settings?.apiKey ?? provider?.options?.apiKey ?? null;
+const providerApiKeySetting = z.string();
+const readProviderApiKeySetting = (provider: Pick<Provider, 'settings'> | undefined): string | null =>
+  providerApiKeySetting.safeParse(provider?.settings?.apiKey).data ?? null;
 
 export const ProvidersPage: React.FC = () => {
   const { t } = useI18n();
