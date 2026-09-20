@@ -122,6 +122,16 @@ describe("persisted directory sessions", () => {
     expect(cachedIds).toEqual(expectedIds)
   })
 
+  test("drops cached records another build wrote without the fields the stores read", () => {
+    const key = `${storage.key(0) ?? ""}`
+    persistSessions(directory, [session(1, 1)])
+    const written = [...storage.values.keys()].find((item) => item.endsWith(".sessions")) ?? key
+    const stale = { ...session(2, 2), time: undefined }
+    storage.setItem(written, JSON.stringify([session(1, 1), stale, { id: "ses_003" }, "junk"]))
+
+    expect(readDirCache(directory).sessions?.map((item) => item.id)).toEqual(["ses_001"])
+  })
+
   test("persists authoritative empty instead of resurrecting legacy sessions", () => {
     const legacyKey = legacySessionKey(directory)
     storage.setItem(legacyKey, JSON.stringify([session(1, 1)]))

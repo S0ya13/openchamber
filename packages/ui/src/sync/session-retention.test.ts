@@ -85,6 +85,14 @@ describe('retention eligibility', () => {
       .toEqual(['leaf', 'child', 'root']);
   });
 
+  test('never selects a record that carries no timestamps', () => {
+    // Models a cached record another build wrote without `time`; the filter
+    // must protect it rather than throw on the first render.
+    const stale = Object.assign(session('stale'), { time: undefined });
+    expect(candidates([stale, session('old')])).toEqual(['old']);
+    expect(candidates([stale, session('old')], 'archive')).toEqual(['old']);
+  });
+
   test('rejects invalid retention periods and cycles', () => {
     for (const cutoffDays of [0, -1, NaN, Infinity]) {
       expect(buildSessionRetentionCandidates({
