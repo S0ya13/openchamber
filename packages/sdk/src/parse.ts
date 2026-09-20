@@ -11,6 +11,7 @@ import {
   GUEST_COMMAND_NAME,
   GUEST_FILESYSTEM_PATTERNS_MAX,
   GUEST_FILESYSTEM_PATTERN_MAX,
+  GUEST_SERVICE_PROVIDES,
   GUEST_TOOLS_MAX,
   GUEST_TOOL_COLUMNS_MAX,
   GUEST_TOOL_COLUMN_MAX,
@@ -32,6 +33,9 @@ import {
   type ParseManifestResult,
   type ParseManifestSuccess,
   type SocketBinding,
+  GUEST_SURFACE_DOCKS,
+  GUEST_SURFACE_DOCK_SIZE_MAX,
+  GUEST_SURFACE_DOCK_SIZE_MIN,
 } from './manifest.ts';
 
 const isPanelIcon = (value: string): boolean => (
@@ -88,6 +92,8 @@ const panelSchema = z.object({
   name: z.string().trim().min(1),
   icon: z.string().trim().refine(isPanelIcon),
   entry: z.string().trim().refine(isSafeAssetPath).optional(),
+  dock: z.enum(GUEST_SURFACE_DOCKS).optional(),
+  size: z.number().int().min(GUEST_SURFACE_DOCK_SIZE_MIN).max(GUEST_SURFACE_DOCK_SIZE_MAX).optional(),
 });
 
 const integrationSettingSchema = z.object({
@@ -197,6 +203,10 @@ const serviceSchema = z.object({
   entry: z.string().trim().refine(isSafeAssetPath),
   runtime: z.literal('host'),
   permissions: servicePermissionsSchema.optional(),
+  provides: z.array(z.enum(GUEST_SERVICE_PROVIDES)).min(1).max(GUEST_SERVICE_PROVIDES.length)
+    .refine((roles) => new Set(roles).size === roles.length, { message: 'provides entries must be unique' })
+    .optional(),
+  surface: z.literal(true).optional(),
 });
 
 const uniqueBy = <T,>(items: T[], key: (item: T) => string): boolean => (
@@ -274,7 +284,10 @@ const runtimeContributions = (contributes: z.output<typeof contributesSchema>): 
   if (contributes.attach !== undefined && contributes.attach !== false) declared.push('attach');
   if (contributes.capabilities && contributes.capabilities.length > 0) declared.push('capabilities');
   if (contributes.integration !== undefined) declared.push('integration');
-  if (contributes.service !== undefined) declared.push('service');
+  // A service the host starts itself (it provides a role or a surface) needs
+  // no frame; one that only answers a panel's `serviceRequest` has no caller
+  // without one.
+  if (contributes.service !== undefined && !contributes.service.provides?.length && !contributes.service.surface) declared.push('service');
   if (contributes.filesystem !== undefined) declared.push('filesystem');
   if (contributes.actions !== undefined) declared.push('actions');
   if (contributes.commands !== undefined) declared.push('commands');
@@ -287,6 +300,15 @@ export const openChamberManifestSchema = z.object({
     openchamber: z.string().trim().regex(OPENCHAMBER_ENGINE_PATTERN),
   }).strict().optional(),
   contributes: contributesSchema.superRefine((contributes, ctx) => {
+    // Docking only means something for a page beside a shared surface.
+    const docked = contributes.panel.dock !== undefined || contributes.panel.size !== undefined;
+    if (docked && !(contributes.service?.surface && hasGuestPage(contributes))) {
+      ctx.addIssue({
+        code: 'custom', path: ['panel', 'dock'],
+        message: 'panel.dock and panel.size place panel.entry beside service.surface; they need both.',
+      });
+      return;
+    }
     if (hasGuestPage(contributes)) return;
     if (contributes.background) {
       const needsPanel = [];
@@ -369,6 +391,12 @@ const failureFromIssue = (issue: { path: ReadonlyArray<PropertyKey>; code: strin
       return fail('invalid-panel-icon', 'panel.icon must be a Remixicon name or a package .svg path.');
     case 'contributes.panel.entry':
       return fail('invalid-panel-entry', 'panel.entry must be a relative path inside the package.');
+    case 'contributes.panel.dock':
+      return fail('invalid-panel', issue.code === 'custom'
+        ? issue.message
+        : `panel.dock is one of ${GUEST_SURFACE_DOCKS.join(', ')}.`);
+    case 'contributes.panel.size':
+      return fail('invalid-panel', `panel.size is a whole number of CSS pixels from ${GUEST_SURFACE_DOCK_SIZE_MIN} to ${GUEST_SURFACE_DOCK_SIZE_MAX}.`);
     case 'contributes.capabilities':
       return fail('invalid-capabilities', 'contributes.capabilities may list "prompt", "sessions", and "files".');
     default:
@@ -420,7 +448,7 @@ const failureFromIssue = (issue: { path: ReadonlyArray<PropertyKey>; code: strin
     );
   }
   if (path.startsWith('contributes.service')) {
-    return fail('invalid-service', 'contributes.service needs entry, runtime "host", and optional permissions.');
+    return fail('invalid-service', 'contributes.service needs entry, runtime "host", optional permissions, optional provides ("browser"), and optional surface (true).');
   }
   return fail('missing-panel', 'contributes.panel is required.');
 };

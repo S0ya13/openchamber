@@ -575,8 +575,11 @@ const handleUiNotificationEvent = (notification: OpenchamberNotification, fallba
 }
 
 export function setActiveSession(directory: string, sessionId: string) {
+  const previousDirectory = _activeDirectory
   _activeDirectory = directory
   _activeSession = sessionId
+  getImperativeSessionMessageLoader()?.scheduleCacheRetention(previousDirectory)
+  getImperativeSessionMessageLoader()?.touchSessionCache({ directory, sessionID: sessionId })
 }
 
 export function setExternallyViewedSession(directory: string, sessionId: string, viewed: boolean) {
@@ -584,6 +587,7 @@ export function setExternallyViewedSession(directory: string, sessionId: string,
   const key = viewedSessionKey(directory, sessionId)
   if (!viewed) {
     externallyViewedSessions.delete(key)
+    getImperativeSessionMessageLoader()?.scheduleCacheRetention(directory)
     return
   }
   externallyViewedSessions.set(key, Date.now() + EXTERNAL_VIEW_TTL_MS)
@@ -2703,6 +2707,21 @@ export function SyncProvider(props: {
   }, [props.directory, childStores, routingIndex])
 
   // Set refs so non-React code (session-actions, session-ui-store) can access sync state
+  useEffect(() => messageLoader.startCacheRetention({
+    isCurrent: () => getRuntimeKey() === runtimeKey,
+    isViewed: ({ directory, sessionID }) => (
+      directory === _activeDirectory && sessionID === _activeSession
+    ) || (externallyViewedSessions.get(viewedSessionKey(directory, sessionID)) ?? 0) > Date.now(),
+    isActive: ({ directory, sessionID }) => {
+      const live = useGlobalSessionStatusStore.getState().statusById.get(sessionID)
+      return live?.directory === directory && live.status.type !== "idle"
+    },
+    releaseDerivedCache: ({ directory, sessionID }) => {
+      const store = childStores.getChild(directory)
+      if (store) dropCachedSessionMessageRecordsSnapshots(store, [sessionID])
+    },
+  }), [childStores, messageLoader, runtimeKey])
+
   useEffect(() => {
     setImperativeSessionMessageLoader(messageLoader)
     setSyncRefs(props.sdk, childStores, props.directory, (sessionID, dir) => {
@@ -3213,7 +3232,7 @@ const rememberSessionMessageRecordsSnapshot = (
   }
 }
 
-export function dropCachedSessionMessageRecordsSnapshots(
+function dropCachedSessionMessageRecordsSnapshots(
   store: StoreApi<DirectoryStore>,
   sessionIDs: Iterable<string>,
 ): void {

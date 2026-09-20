@@ -267,6 +267,22 @@ describe("messages and config", () => {
     expect(page.cursor).toEqual({ previous: "p1" })
   })
 
+  test("a page shorter than the limit drops the next cursor the server still attaches", async () => {
+    responses.push(json({
+      data: [{ id: "msg_only", type: "user", time: { created: 1 }, text: "hi" }],
+      cursor: { previous: "p1", next: "n1" },
+    }))
+    const short = await opencodeClient.getSessionMessages("ses_1", { limit: 20 })
+    expect(short.cursor).toEqual({ previous: "p1" })
+
+    responses.push(json({
+      data: [{ id: "msg_only", type: "user", time: { created: 1 }, text: "hi" }],
+      cursor: { previous: "p1", next: "n1" },
+    }))
+    const full = await opencodeClient.getSessionMessages("ses_1", { limit: 1 })
+    expect(full.cursor).toEqual({ previous: "p1", next: "n1" })
+  })
+
   test("a cursor is never combined with an order", async () => {
     responses.push(json({ data: [], cursor: {} }))
     await opencodeClient.getSessionMessages("ses_1", { cursor: "abc", order: "asc" })

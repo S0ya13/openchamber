@@ -12,7 +12,25 @@ export type PanelContribution = {
   name: string;
   icon: string;
   entry?: string;
+  /**
+   * Beside a shared surface (`service.surface`), the panel page is docked to
+   * one edge of the host-drawn picture: a toolbar above it, an inspector
+   * below, a tool column beside it. `dock` is the edge (default
+   * `GUEST_SURFACE_DOCK_DEFAULT`) and `size` the page's thickness in CSS
+   * pixels across that edge (default `GUEST_SURFACE_DOCK_SIZE_DEFAULT`).
+   * Both only make sense with `entry` and `service.surface` together.
+   */
+  dock?: GuestSurfaceDock;
+  size?: number;
 };
+
+export const GUEST_SURFACE_DOCKS = ['top', 'bottom', 'left', 'right'] as const;
+export type GuestSurfaceDock = (typeof GUEST_SURFACE_DOCKS)[number];
+export const GUEST_SURFACE_DOCK_DEFAULT: GuestSurfaceDock = 'top';
+/** Thickness in CSS px of a docked `panel.entry` when the manifest names none. */
+export const GUEST_SURFACE_DOCK_SIZE_DEFAULT = 40;
+export const GUEST_SURFACE_DOCK_SIZE_MIN = 24;
+export const GUEST_SURFACE_DOCK_SIZE_MAX = 480;
 
 /** Sandboxed HTML loaded on demand for background actions and slash commands. */
 export type BackgroundContribution = {
@@ -274,10 +292,27 @@ export type PublicSocketBinding = {
   override: string | null;
 };
 
+/**
+ * Host roles a service can stand in for. `browser` answers the agent's
+ * `browser.*` actions in place of the in-app browser view; the contract is in
+ * `service-providers.ts`. A service that provides a role needs no panel or
+ * background entry: the host starts it on the first action.
+ */
+export const GUEST_SERVICE_PROVIDES = ['browser'] as const;
+export type GuestServiceProvides = (typeof GUEST_SERVICE_PROVIDES)[number];
+
 export type ServiceContribution = {
   entry: string;
   runtime: 'host';
   permissions?: ServicePermissions;
+  provides?: GuestServiceProvides[];
+  /**
+   * The service shows a live surface (frames out, input in) that the host
+   * draws in this extension's rail panel; see `service-surface.ts`. With
+   * `panel.entry` too, that page is docked to one edge of the picture (see
+   * `PanelContribution.dock`); without it, the panel is the surface alone.
+   */
+  surface?: true;
 };
 
 /** Catalog card for a local service. Drops nothing secret; grant is host state. */
@@ -285,8 +320,15 @@ export type PublicService = {
   runtime: 'host';
   permissions?: PublicServicePermissions;
   socketBindings?: PublicSocketBinding[];
+  provides?: GuestServiceProvides[];
+  surface?: true;
   granted: boolean;
 };
+
+export const serviceProvides = (
+  service: Pick<ServiceContribution, 'provides'> | undefined,
+  role: GuestServiceProvides,
+): boolean => Boolean(service?.provides?.includes(role));
 
 /**
  * What a guest may do beyond drawing its own panel. The user approves the
@@ -538,6 +580,12 @@ export const toPublicService = (
       resolved: binding.resolved,
       override: binding.override,
     }));
+  }
+  if (service.provides && service.provides.length > 0) {
+    next.provides = [...service.provides];
+  }
+  if (service.surface) {
+    next.surface = true;
   }
   return next;
 };

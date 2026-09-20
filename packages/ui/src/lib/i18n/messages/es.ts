@@ -4,6 +4,7 @@ import { linearIssuePickerI18n } from './linear-issue-picker.i18n';
 import { linearPanelI18n } from './linear-panel.i18n';
 import { routingI18n } from './routing.i18n';
 import { pluginPanelI18n } from './plugin-panel.i18n';
+import { surfacePanelI18n } from './surface-panel.i18n';
 
 export const dict: Record<I18nKey, string> = {
   'sessions.aiRename.action': 'Renombrar con IA',
@@ -37,6 +38,7 @@ export const dict: Record<I18nKey, string> = {
   ...linearPanelI18n.es,
   ...routingI18n.es,
   ...pluginPanelI18n.es,
+  ...surfacePanelI18n.es,
   'terminalView.actions.attachSelection': 'Adjuntar salida seleccionada',
   'terminalView.actions.copySelection': 'Copiar salida seleccionada',
   'terminalView.toast.selectionCopied': 'Salida copiada',
@@ -2308,6 +2310,7 @@ export const dict: Record<I18nKey, string> = {
   "chat.textSelection.title.commentOnSelection": "Comentar la selección",
   "chat.textSelection.comment.placeholder": "Añade un comentario opcional...",
   "chat.textSelection.comment.attach": "Adjuntar",
+  "chat.textSelection.comment.attachFailed": "No se pudo adjuntar el comentario. Acórtalo o elimina otro contexto adjunto e inténtalo de nuevo.",
   "chat.textSelection.actions.addToNotes": "Añadir a las notas",
   "chat.textSelection.title.addToCurrentChat": "Añadir al chat actual",
   "chat.textSelection.title.saveInsightToNotes": "Guardar texto seleccionado en notas",
@@ -2901,6 +2904,9 @@ export const dict: Record<I18nKey, string> = {
   "desktopHostSwitcher.error.failedToSave": "No se pudo guardar",
   "desktopHostSwitcher.error.failedToLoad": "No se pudo cargar",
   "desktopHostSwitcher.error.invalidUrl": "URL inválida (debe ser http/https)",
+  "desktopHostSwitcher.error.pairingRejected": "El enlace de vinculación no es válido o ha caducado. Genera uno nuevo.",
+  "desktopHostSwitcher.error.pairingFailed": "Error de vinculación (HTTP {status}).",
+  "desktopHostSwitcher.error.pairingInvalidResponse": "El servidor devolvió una respuesta de vinculación no válida.",
   "desktopHostSwitcher.error.failedToOpenNewWindow": "No se pudo abrir nueva ventana",
   "desktopHostSwitcher.instance.local": "Local",
   "desktopHostSwitcher.instance.fallback": "Instancia",
@@ -3056,6 +3062,9 @@ export const dict: Record<I18nKey, string> = {
   "onboarding.desktopRecovery.actions.retrying": "Reintentando…",
   "onboarding.desktopRecovery.actions.retryConnection": "Reintentar conexión",
   "startup.initRecovery.title": "Error al iniciar",
+  "startup.initRecovery.openCodeUnavailable": "OpenChamber está accesible, pero OpenCode no está listo. Comprueba OpenCode en el servidor y vuelve a intentarlo.",
+  "startup.initRecovery.binary": "Ejecutable de OpenCode",
+  "startup.initRecovery.error": "Error de OpenCode",
   "startup.initRecovery.description": "OpenChamber no pudo completar la inicialización. Comprueba que el servidor esté en ejecución y vuelve a intentarlo.",
   "startup.initRecovery.retry": "Reintentar",
   "startup.initRecovery.retrying": "Reintentando…",

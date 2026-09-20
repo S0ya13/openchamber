@@ -89,6 +89,7 @@ surface on desktop and the overlay itself on mobile.
 | `language/` | What the text *means*: `@` references, `/` and `#` tokens, markdown, and which picker a caret asks for |
 | `editor/` | The CodeMirror view that renders the language and owns the caret |
 | `state/` | Composer-local lifecycle state: ArrowUp/ArrowDown browsing, draft stash/restore, mobile shell, popup placement, draft targeting |
+| `comment/` | Mobile comment mode: quoted-selection state, its scope ownership, and the shell that replaces the composer while a comment is written |
 | `submit/` | Turning what the user has into what gets sent. `guestCommands.ts` routes an extension's slash command (`contributes.commands`) before anything is sent: `/name args` never reaches the model, the extension resolves it into a chip |
 | `attachments/` | Files: paths, drop payloads |
 | `ui/` | Presentation. `ComposerAttachmentControls` lists files, GitHub, Linear, then guests with `contributes.attach`. `"panel"` opens the rail. `"dialog"` opens `GuestAttachDialog` with that guest iframe and `ready.surface: "dialog"` (loading `attachEntry` when the manifest declared one). `host.attach` writes the composer chip. Clicking that chip reopens the guest with the chip as `ready.item`: dialog guests get it as a prop, panel guests through `lib/guests/item-store.ts` and the rail. Message and session actions (`contributes.actions`) travel the same two roads with a `GuestMessageItem` / `GuestSessionItem` (`lib/guests/dialog-store.ts` `openGuestWithItem`); the dialog they open lives in `layout/GuestHosts.tsx`, not here, and an `attach` from it closes it through `handleGuestAttach`. The chip keeps the guest's opaque `data` (also on the `guest-issue` / `guest-pr` context part metadata and the session `LinkedGuestIssue` snapshot) so it comes back byte-identical; it is never part of the context text. VS Code and mobile skip that list. |
@@ -370,8 +371,7 @@ none of them is verifiable outside a real device.** Change them only against
 hardware.
 
 `state/mobileComposerMorph.ts` plays the pill ↔ composer swap as a FLIP morph
-in the native iOS shell only, after t3code's resting-composer transition.
-The swap commits synchronously (`flushSync`); the glass box
+in the native iOS shell only. The swap commits synchronously (`flushSync`); the glass box
 (`data-composer-box`) is then frozen at its old height and animated to the
 new one (WAAPI) with its rows anchored to the bottom edge, so the footer and
 model/agent rows stay where the pill's rows were; the prompt
@@ -398,12 +398,72 @@ automatic end write while a transition runs, lets the geometry land in one
 step, and drives scrollTop on the same curve. Mobile browsers, Android and
 reduced motion keep the instant swap.
 
+## Mobile comment mode
+
+On mobile, "Comment" on a text selection does not open a floating input. The
+selection menu (`TextSelectionMenu.tsx`) hands the quote to this column's
+composer through `comment/MobileCommentComposerContext.ts`; `ChatContainer`
+creates one controller per column so an embedded column's selections never
+comment into a sibling. Desktop keeps its floating input in the selection
+menu; only the mobile path changed.
+
+`comment/mobileCommentDraft.ts` owns the lifecycle. The scope (runtime,
+directory, session) comes from the visible composer's inline-draft target,
+including an expanded or pending BTW composer. A collapsed BTW uses the main
+composer's target. The hook publishes that scope before paint; the selection
+menu supplies only the quote. The scope is captured when the comment opens and
+is the only place the quote may land: attach writes a `chat-quote` draft into
+`useInlineCommentDraftStore` at the captured target, never the currently
+active session, and a scope change closes the comment instead of re-targeting
+it. Attach also refuses at the boundary unless the authoritative scope still
+matches the captured one. Every mutation carries the generation of its open,
+so a repeated attach or a dictation transcript that arrives after cancel or a
+reopen is rejected; `insertAndAttach` checks the generation once for both
+steps, so a stale dictation completion neither writes text nor attaches the
+newer comment that replaced its own. Attach is once-only; the comment text
+itself is optional. The controller closes only after the inline-draft store
+accepts the write. A size-limit rejection keeps the quote, typed text and any
+inserted transcript open for editing or retry, with a localized error toast.
+A stale runtime closes the comment without writing to the new runtime.
+Desktop's floating comment input also remains open when the store rejects
+an attachment, using the same localized error.
+
+`comment/useMobileCommentComposerMode.ts` is ChatInput's seam: subscription,
+scope ownership, and the attach/cancel transitions, flushed inside the tap and
+followed by `useMobileComposerShell`'s `expand()` so the restored composer is
+focused while the gesture is still live — the only focus iOS raises the soft
+keyboard for. The opening tap does the same in reverse: `flushSync` mounts the
+shell and its `useLayoutEffect` focus runs inside the gesture. `ChatInput`
+swaps the normal composer (pill or expanded, plus its chips and footers) for
+`comment/MobileCommentComposer.tsx` while the comment is open — the normal
+draft is hidden, not cleared, and comes back unchanged — and keys the shell by
+generation so a replaced open remounts it with fresh dictation callbacks.
+Every send path (submit, queue, primary action) is inert during comment mode;
+the form submit attaches.
+
+While the comment is open, the selection menu keeps the quoted range painted
+through its existing highlight overlay (rAF on scroll/resize, no polling); the
+Range lives in that menu component only and is released when the comment
+ends or the message unmounts.
+
+Voice: the comment shell mounts its own `ComposerDictation` whose insert
+callbacks target the comment draft (insert-and-send attaches; it never sends).
+While it is mounted, the composer's wrapper-level dictation engine is not —
+two engines would both answer the global `openchamber:dictation-toggle`
+event, and a transcript meant for one editor must not reach the other. A
+recording in flight when comment mode opens is discarded by that swap.
+
+The comment editor reuses `ComposerEditor` with `dataChatInput="comment"` so
+the `data-chat-input="true"` helpers (`focusChatInput`, shortcut guards) keep
+meaning "the prompt editor".
+
 ## Testing
 
-The package has no DOM test environment, so coverage stops at the state and
-logic layers: the language, the submit assembly, path and drop handling, text
-splicing, large-paste detection, paste-offer invalidation, input-history
-traversal, and the CodeMirror language extension at the `EditorState` level.
+Tests cover the language, submit assembly, path and drop handling, text splicing,
+large-paste detection, paste-offer invalidation, input-history traversal, the
+mobile comment lifecycle, and the CodeMirror language extension at the
+`EditorState` level. The mobile comment hook also has a Happy DOM integration
+suite for the mounted composer's target, stale callbacks, and failed attaches.
 
 Rendering, focus, keyboard behavior, IME and WKWebView are **not covered by
 tests** and are verified by hand. That includes ArrowUp and ArrowDown recall,
@@ -416,18 +476,16 @@ suites that install module mocks are order-dependent.
 
 ## Enter preference
 
-`keyboardPolicy.ts` owns the submission decision. The expanded desktop composer
-always inserts a newline with Enter, including Shift+Enter, and sends with
-Ctrl/Cmd+Enter; it ignores the Enter-to-send preference. Outside expanded mode,
-until the Chat setting is changed, desktop Enter sends, mobile requires
-Ctrl/Cmd+Enter, and Shift-modified Enter does not send. An explicit choice
-applies across the other shared composers; Ctrl/Cmd+Enter sends in either
-configured mode.
+`keyboardPolicy.ts` owns the submission decision. On mobile, Enter and
+Shift+Enter insert a newline regardless of synced settings or CodeMirror's
+deferred Shift modifier. Ctrl/Cmd+Enter remains available for external keyboards;
+Send and Queue buttons retain their normal behavior. The Enter-to-send setting
+and its search entry are hidden on mobile without changing the desktop preference.
 
-CodeMirror's deferred mobile Enter loses modifier information. Untouched
-settings restore Shift to keep the original policy. Once configured, with mobile
-autocapitalization enabled, the editor cannot distinguish its Shift flag from
-an intentional Shift press and does not restore Shift. Consequently, deferred
-Shift+Enter can send when Enter-to-send is enabled and cannot serve as the send
-shortcut when it is disabled. Ctrl/Cmd+Enter remains the supported modified
-send shortcut on this path.
+The expanded desktop composer always inserts a newline with Enter, including
+Shift+Enter, and sends with Ctrl/Cmd+Enter; it ignores the Enter-to-send preference.
+
+Outside mobile and expanded mode, desktop Enter sends by default, and
+Shift-modified Enter does not send until the Chat setting is changed.
+An explicit choice controls Enter and Shift+Enter there;
+Ctrl/Cmd+Enter sends in either configured mode.

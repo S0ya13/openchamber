@@ -141,26 +141,27 @@ describe("SessionMessageLoader", () => {
     const calls: Array<{ limit?: number; cursor?: string }> = []
     const { childStores, loader } = createLoader(async ({ sessionID, limit, cursor }) => {
       calls.push({ limit, cursor })
+      // Ten prompts satisfy the cold-navigation turn target without expansion.
       return cursor
         ? response([createRecord(sessionID, "msg_older", 1)])
-        : response([createRecord(sessionID, "msg_latest", 2)], "older-cursor")
+        : response(Array.from({ length: 10 }, (_, index) => createRecord(sessionID, `msg_${index + 2}`, index + 2)), "older-cursor")
     })
     const target = { directory: "/repo", sessionID: "session-a" }
 
     await loader.ensure(target, { reason: "prefetch" })
     await Promise.resolve()
 
-    expect(calls).toEqual([{ limit: 50, cursor: undefined }])
+    expect(calls).toEqual([{ limit: 100, cursor: undefined }])
     expect(loader.getSnapshot(target).cursor).toBe("older-cursor")
 
     await loader.loadOlder(target)
 
     expect(calls).toEqual([
-      { limit: 50, cursor: undefined },
+      { limit: 100, cursor: undefined },
       { limit: 100, cursor: "older-cursor" },
     ])
     expect(childStores.getChild(target.directory)?.getState().message[target.sessionID]?.map((message) => message.id))
-      .toEqual(["msg_older", "msg_latest"])
+      .toEqual(["msg_older", ...Array.from({ length: 10 }, (_, index) => `msg_${index + 2}`)])
     loader.dispose()
     childStores.disposeAll()
   })
@@ -291,7 +292,7 @@ describe("SessionMessageLoader", () => {
     await loading
     await Promise.resolve()
     expect(calls).toBe(2)
-    expect(limits).toEqual([50, 80])
+    expect(limits).toEqual([100, 80])
 
     refresh.resolve(response([createRecord(target.sessionID, "msg_2")]))
     await Promise.all([refreshing, duplicateRefresh])
@@ -357,14 +358,16 @@ describe("SessionMessageLoader", () => {
       loader.ensure({ directory: providerDirectory, sessionID }),
       loader.ensure({ directory: selectedDirectory, sessionID }),
     ])
+
+    // Cold navigation extends each directory's window through its own cursor.
+    expect(calls.filter((call) => call.cursor)).toEqual([
+      { directory: providerDirectory, cursor: `${providerDirectory}-cursor` },
+      { directory: selectedDirectory, cursor: `${selectedDirectory}-cursor` },
+    ])
+    expect(loader.getSnapshot({ directory: selectedDirectory, sessionID }).complete).toBe(true)
     calls.length = 0
-
     await loader.loadOlder({ directory: selectedDirectory, sessionID })
-
-    expect(calls).toEqual([{
-      directory: selectedDirectory,
-      cursor: `${selectedDirectory}-cursor`,
-    }])
+    expect(calls).toEqual([])
     loader.dispose()
     childStores.disposeAll()
   })
@@ -478,8 +481,8 @@ describe("SessionMessageLoader", () => {
       const initialEvent = events.find((event) => event.operation === "session-messages.initial")
       const pageEvents = events.filter((event) => event.operation === "session-messages.page")
       expect(calls).toBe(3)
-      expect(pageEvents.map((event) => event.requestLimit)).toEqual([50, 100])
-      expect(pageEvents.map((event) => event.cursorPresent)).toEqual([false, false])
+      expect(pageEvents.map((event) => event.requestLimit)).toEqual([100, 100])
+      expect(pageEvents.map((event) => event.cursorPresent)).toEqual([false, true])
       expect(pageEvents.map((event) => event.recordCount)).toEqual([1, 1])
       expect(initialEvent?.outcome).toBe("complete")
       expect(initialEvent?.retryCount).toBe(1)

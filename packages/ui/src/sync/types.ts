@@ -116,7 +116,7 @@ export const MAX_DIR_STORES = 30
  */
 export const EVICTION_GRACE_MS = 30 * 1000
 export const DIR_IDLE_TTL_MS = 20 * 60 * 1000
-export const SESSION_CACHE_LIMIT = 40
+export const SESSION_CACHE_LIMIT = 20
 
 export const EMPTY_PATH: Path = { directory: "", worktree: "", home: "" }
 export const EMPTY_PROVIDER_CATALOG: ProviderCatalog = { providers: [], models: [] }

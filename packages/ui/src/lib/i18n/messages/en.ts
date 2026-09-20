@@ -3,6 +3,7 @@ import { linearIssuePickerI18n } from './linear-issue-picker.i18n';
 import { linearPanelI18n } from './linear-panel.i18n';
 import { routingI18n } from './routing.i18n';
 import { pluginPanelI18n } from './plugin-panel.i18n';
+import { surfacePanelI18n } from './surface-panel.i18n';
 
 export const dict = {
   'sessions.aiRename.action': 'Rename with AI',
@@ -36,6 +37,7 @@ export const dict = {
   ...linearPanelI18n.en,
   ...routingI18n.en,
   ...pluginPanelI18n.en,
+  ...surfacePanelI18n.en,
   'terminalView.actions.attachSelection': 'Attach selected output',
   'terminalView.actions.copySelection': 'Copy selected output',
   'terminalView.toast.selectionCopied': 'Output copied',
@@ -2330,6 +2332,7 @@ export const dict = {
   'chat.textSelection.title.commentOnSelection': 'Comment on selection',
   'chat.textSelection.comment.placeholder': 'Add an optional comment...',
   'chat.textSelection.comment.attach': 'Attach',
+  'chat.textSelection.comment.attachFailed': 'Could not attach the comment. Shorten it or remove other attached context, then try again.',
   'chat.textSelection.actions.addToNotes': 'Add to notes',
   'chat.textSelection.title.addToCurrentChat': 'Add to current chat',
   'chat.textSelection.title.saveInsightToNotes': 'Save selected text to notes',
@@ -2935,6 +2938,9 @@ export const dict = {
   'desktopHostSwitcher.error.failedToSave': 'Failed to save',
   'desktopHostSwitcher.error.failedToLoad': 'Failed to load',
   'desktopHostSwitcher.error.invalidUrl': 'Invalid URL (must be http/https)',
+  'desktopHostSwitcher.error.pairingRejected': 'Pairing link is invalid or expired. Generate a new one.',
+  'desktopHostSwitcher.error.pairingFailed': 'Pairing failed (HTTP {status}).',
+  'desktopHostSwitcher.error.pairingInvalidResponse': 'The server returned an invalid pairing response.',
   'desktopHostSwitcher.error.failedToOpenNewWindow': 'Failed to open new window',
   'desktopHostSwitcher.instance.local': 'Local',
   'desktopHostSwitcher.instance.fallback': 'Instance',
@@ -3090,6 +3096,9 @@ export const dict = {
   'onboarding.desktopRecovery.actions.retrying': 'Retrying…',
   'onboarding.desktopRecovery.actions.retryConnection': 'Retry Connection',
   'startup.initRecovery.title': 'Startup failed',
+  'startup.initRecovery.openCodeUnavailable': 'OpenChamber is reachable, but OpenCode is not ready. Check OpenCode on the server, then retry.',
+  'startup.initRecovery.binary': 'OpenCode executable',
+  'startup.initRecovery.error': 'OpenCode error',
   'startup.initRecovery.description': 'OpenChamber could not finish initialization. Check that the server is running, then retry.',
   'startup.initRecovery.retry': 'Retry',
   'startup.initRecovery.retrying': 'Retrying…',

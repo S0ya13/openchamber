@@ -4,6 +4,7 @@ import { linearIssuePickerI18n } from './linear-issue-picker.i18n';
 import { linearPanelI18n } from './linear-panel.i18n';
 import { routingI18n } from './routing.i18n';
 import { pluginPanelI18n } from './plugin-panel.i18n';
+import { surfacePanelI18n } from './surface-panel.i18n';
 
 export const dict: Record<I18nKey, string> = {
   'sessions.aiRename.action': '使用 AI 重新命名',
@@ -37,6 +38,7 @@ export const dict: Record<I18nKey, string> = {
   ...linearPanelI18n['zh-TW'],
   ...routingI18n['zh-TW'],
   ...pluginPanelI18n['zh-TW'],
+  ...surfacePanelI18n['zh-TW'],
   'terminalView.actions.attachSelection': '附加所選輸出',
   'terminalView.actions.copySelection': '複製所選輸出',
   'terminalView.toast.selectionCopied': '已複製輸出',
@@ -2300,6 +2302,7 @@ export const dict: Record<I18nKey, string> = {
   'chat.textSelection.title.commentOnSelection': '對所選內容留言',
   'chat.textSelection.comment.placeholder': '新增選填留言...',
   'chat.textSelection.comment.attach': '附加',
+  'chat.textSelection.comment.attachFailed': '無法附加評論。請縮短評論或移除其他已附加的上下文，然後重試。',
   'chat.textSelection.actions.addToNotes': '加入筆記',
   'chat.textSelection.title.addToCurrentChat': '加入目前聊天',
   'chat.textSelection.title.saveInsightToNotes': '將選取文字儲存到筆記',
@@ -2902,6 +2905,9 @@ export const dict: Record<I18nKey, string> = {
   'desktopHostSwitcher.error.failedToSave': '儲存失敗',
   'desktopHostSwitcher.error.failedToLoad': '載入失敗',
   'desktopHostSwitcher.error.invalidUrl': '無效 URL（必須是 http/https）',
+  'desktopHostSwitcher.error.pairingRejected': '配對連結無效或已過期。請產生新連結。',
+  'desktopHostSwitcher.error.pairingFailed': '配對失敗（HTTP {status}）。',
+  'desktopHostSwitcher.error.pairingInvalidResponse': '伺服器回傳了無效的配對回應。',
   'desktopHostSwitcher.error.failedToOpenNewWindow': '在新視窗開啟失敗',
   'desktopHostSwitcher.instance.local': 'Local',
   'desktopHostSwitcher.instance.fallback': '實例',
@@ -3053,6 +3059,9 @@ export const dict: Record<I18nKey, string> = {
   'onboarding.desktopRecovery.actions.retrying': '重試中…',
   'onboarding.desktopRecovery.actions.retryConnection': '重試連線',
   'startup.initRecovery.title': '啟動失敗',
+  'startup.initRecovery.openCodeUnavailable': '可以連線至 OpenChamber，但 OpenCode 尚未就緒。請檢查伺服器上的 OpenCode，然後重試。',
+  'startup.initRecovery.binary': 'OpenCode 執行檔',
+  'startup.initRecovery.error': 'OpenCode 錯誤',
   'startup.initRecovery.description': 'OpenChamber 未能完成初始化。請檢查伺服器是否正在執行，然後重試。',
   'startup.initRecovery.retry': '重試',
   'startup.initRecovery.retrying': '重試中…',

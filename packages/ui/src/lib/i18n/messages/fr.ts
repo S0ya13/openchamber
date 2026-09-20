@@ -3,6 +3,7 @@ import { linearIssuePickerI18n } from './linear-issue-picker.i18n';
 import { linearPanelI18n } from './linear-panel.i18n';
 import { routingI18n } from './routing.i18n';
 import { pluginPanelI18n } from './plugin-panel.i18n';
+import { surfacePanelI18n } from './surface-panel.i18n';
 
 export const dict = {
   'sessions.aiRename.action': 'Renommer avec l’IA',
@@ -36,6 +37,7 @@ export const dict = {
   ...linearPanelI18n.fr,
   ...routingI18n.fr,
   ...pluginPanelI18n.fr,
+  ...surfacePanelI18n.fr,
   'terminalView.actions.attachSelection': 'Joindre la sortie sélectionnée',
   'terminalView.actions.copySelection': 'Copier la sortie sélectionnée',
   'terminalView.toast.selectionCopied': 'Sortie copiée',
@@ -2052,6 +2054,7 @@ export const dict = {
   'chat.textSelection.title.commentOnSelection': 'Commenter la sélection',
   'chat.textSelection.comment.placeholder': 'Ajouter un commentaire facultatif...',
   'chat.textSelection.comment.attach': 'Joindre',
+  'chat.textSelection.comment.attachFailed': 'Impossible de joindre le commentaire. Raccourcissez-le ou retirez du contexte joint, puis réessayez.',
   'chat.textSelection.actions.addToNotes': 'Ajouter aux notes',
   'chat.textSelection.title.addToCurrentChat': 'Ajouter au chat actuel',
   'chat.textSelection.title.saveInsightToNotes': 'Enregistrer le texte sélectionné dans les notes',
@@ -2630,6 +2633,9 @@ export const dict = {
   'desktopHostSwitcher.error.failedToSave': 'Échec de l\'enregistrement',
   'desktopHostSwitcher.error.failedToLoad': 'Échec du chargement',
   'desktopHostSwitcher.error.invalidUrl': 'URL non valide (doit être http/https)',
+  'desktopHostSwitcher.error.pairingRejected': 'Le lien de jumelage est invalide ou a expiré. Générez-en un nouveau.',
+  'desktopHostSwitcher.error.pairingFailed': 'Échec du jumelage (HTTP {status}).',
+  'desktopHostSwitcher.error.pairingInvalidResponse': 'Le serveur a renvoyé une réponse de jumelage invalide.',
   'desktopHostSwitcher.error.failedToOpenNewWindow': 'Échec de l\'ouverture d\'une nouvelle fenêtre',
   'desktopHostSwitcher.instance.local': 'Local',
   'desktopHostSwitcher.instance.fallback': 'Instance',
@@ -2781,6 +2787,9 @@ export const dict = {
   'onboarding.desktopRecovery.actions.retrying': 'Nouvelle tentative…',
   'onboarding.desktopRecovery.actions.retryConnection': 'Réessayer la connexion',
   'startup.initRecovery.title': 'Le démarrage a échoué',
+  'startup.initRecovery.openCodeUnavailable': 'OpenChamber est accessible, mais OpenCode n’est pas prêt. Vérifiez OpenCode sur le serveur, puis réessayez.',
+  'startup.initRecovery.binary': 'Exécutable OpenCode',
+  'startup.initRecovery.error': 'Erreur OpenCode',
   'startup.initRecovery.description': 'OpenChamber n\'a pas pu terminer l\'initialisation. Vérifiez que le serveur est en cours d\'exécution, puis réessayez.',
   'startup.initRecovery.retry': 'Réessayer',
   'startup.initRecovery.retrying': 'Nouvelle tentative…',

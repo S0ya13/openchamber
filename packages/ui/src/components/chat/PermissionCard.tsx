@@ -11,6 +11,7 @@ import { Icon } from "@/components/icon/Icon";
 import { DiffPreview, WritePreview } from './DiffPreview';
 import { useI18n, type I18nKey } from '@/lib/i18n';
 import { getVisiblePermissionPatterns } from './permissionCardPatterns';
+import { permissionFilePreviewsSchema } from './permissionFilePreviews';
 import { formatShortcutForDisplay } from '@/lib/shortcuts';
 import { toolFileDiffs } from '@/lib/opencode/tools';
 
@@ -206,6 +207,19 @@ export const PermissionCard: React.FC<PermissionCardProps> = ({
 
   const renderToolContent = () => {
 
+    if (displayToolName === 'edit' || displayToolName === 'write') {
+      const files = permissionFilePreviewsSchema.parse(permission.metadata?.files);
+      if (files.length > 0) {
+        return (
+          <ScrollableOverlay outerClassName="max-h-[60vh]" className="tool-output-surface p-1 rounded-xl border border-border/20 bg-transparent">
+            {files.map((file, index) => (
+              <DiffPreview key={`${file.file}:${index}`} diff={file.patch} filePath={file.file} />
+            ))}
+          </ScrollableOverlay>
+        );
+      }
+    }
+
     if (isBashTool) {
       const description = getMeta('description');
       const workingDir = getMeta('cwd') || getMeta('working_directory') || getMeta('directory') || getMeta('path');
@@ -242,10 +256,10 @@ export const PermissionCard: React.FC<PermissionCardProps> = ({
       );
     }
 
-    if (tool === 'edit' || tool === 'patch' || tool === 'str_replace' || tool === 'str_replace_based_edit_tool') {
+    if (tool === 'edit' || tool === 'patch' || tool === 'multiedit' || tool === 'str_replace' || tool === 'str_replace_based_edit_tool') {
       // v2 previews the change as `metadata.files: FileDiff.Info[]`.
       const previews = toolFileDiffs(metadata);
-      const filePath = previews[0]?.file || getMeta('path') || getMeta('file_path') || getMeta('filename') || getMeta('filePath');
+      const filePath = previews[0]?.file || getMeta('path') || getMeta('file_path') || getMeta('filename') || getMeta('filePath') || getMeta('filepath');
       const changes = previews[0]?.patch || getMeta('changes') || getMeta('diff');
       const replaceAll = getMetaBool('replace_all') || getMetaBool('replaceAll');
 
@@ -266,7 +280,7 @@ export const PermissionCard: React.FC<PermissionCardProps> = ({
     }
 
     if (tool === 'write' || tool === 'create' || tool === 'file_write') {
-      const filePath = getMeta('path') || getMeta('file_path') || getMeta('filename') || getMeta('filePath');
+      const filePath = getMeta('path') || getMeta('file_path') || getMeta('filename') || getMeta('filePath') || getMeta('filepath');
       const content = getMeta('content') || getMeta('text') || getMeta('data');
 
       if (content) {

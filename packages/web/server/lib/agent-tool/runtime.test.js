@@ -266,6 +266,7 @@ describe('managed agent tool runtime', () => {
     const result = await runtime.execute({
       input: { action: 'read', title: 'Uses bun' },
       contextDirectory: '/work/project',
+      contextSessionId: 'ses_1',
       tool: 'openchamber_memory',
     });
 
@@ -275,7 +276,7 @@ describe('managed agent tool runtime', () => {
       'memory.read',
       { action: 'memory.read', title: 'Uses bun' },
       '/work/project',
-      {},
+      { contextSessionId: 'ses_1' },
     );
   });
 
@@ -330,11 +331,12 @@ describe('managed agent tool runtime', () => {
     await runtime.execute({ input: { action: 'session.messages', sessionId: 'ses_1' }, sessionID: 'ses_1' });
 
     expect(resolveSessionDirectory).toHaveBeenCalledWith('ses_1');
+    // The calling session also scopes the action (browser pages are per session).
     expect(executeAction).toHaveBeenCalledWith(
       'session.messages',
       { action: 'session.messages', sessionId: 'ses_1' },
       '/work/other-worktree',
-      {},
+      { contextSessionId: 'ses_1' },
     );
   });
 
@@ -347,7 +349,7 @@ describe('managed agent tool runtime', () => {
 
     await runtime.execute({ input: { action: 'projects.list' }, sessionID: 'ses_1' });
 
-    expect(executeAction).toHaveBeenCalledWith('projects.list', { action: 'projects.list' }, undefined, {});
+    expect(executeAction).toHaveBeenCalledWith('projects.list', { action: 'projects.list' }, undefined, { contextSessionId: 'ses_1' });
   });
 
   it('keeps service failures as structured tool results', async () => {

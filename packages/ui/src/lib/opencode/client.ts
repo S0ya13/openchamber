@@ -811,6 +811,11 @@ class OpencodeService {
   /**
    * One page of a session's messages, newest first by default. `cursor` comes
    * from a previous page; the server rejects combining it with `order`.
+   *
+   * The server attaches `next` to every non-empty page, including the oldest
+   * one, so a caller walking history would always need one more empty request
+   * to learn it is done. A page shorter than the requested limit is the last
+   * page, and its `next` is dropped here so `next` means "more" to callers.
    */
   async getSessionMessages(
     id: string,
@@ -825,9 +830,11 @@ class OpencodeService {
         order: options?.cursor ? undefined : options?.order,
       }),
     )
+    const items = projectMessages(response.data, id).map(({ message, parts }) => ({ info: message, parts }))
+    const lastPage = options?.limit !== undefined && items.length < options.limit
     return {
-      items: projectMessages(response.data, id).map(({ message, parts }) => ({ info: message, parts })),
-      cursor: pageCursor(response.cursor),
+      items,
+      cursor: pageCursor({ ...response.cursor, next: lastPage ? undefined : response.cursor.next }),
     }
   }
 

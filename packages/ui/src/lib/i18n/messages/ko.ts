@@ -4,6 +4,7 @@ import { linearIssuePickerI18n } from './linear-issue-picker.i18n';
 import { linearPanelI18n } from './linear-panel.i18n';
 import { routingI18n } from './routing.i18n';
 import { pluginPanelI18n } from './plugin-panel.i18n';
+import { surfacePanelI18n } from './surface-panel.i18n';
 
 export const dict: Record<I18nKey, string> = {
   'sessions.aiRename.action': 'AI로 이름 변경',
@@ -37,6 +38,7 @@ export const dict: Record<I18nKey, string> = {
   ...linearPanelI18n.ko,
   ...routingI18n.ko,
   ...pluginPanelI18n.ko,
+  ...surfacePanelI18n.ko,
   'terminalView.actions.attachSelection': '선택한 출력 첨부',
   'terminalView.actions.copySelection': '선택한 출력 복사',
   'terminalView.toast.selectionCopied': '출력을 복사했습니다',
@@ -2332,6 +2334,7 @@ export const dict: Record<I18nKey, string> = {
   'chat.textSelection.title.commentOnSelection': '선택 영역에 댓글 달기',
   'chat.textSelection.comment.placeholder': '선택적 댓글 추가...',
   'chat.textSelection.comment.attach': '첨부',
+  'chat.textSelection.comment.attachFailed': '댓글을 첨부하지 못했습니다. 댓글을 줄이거나 다른 첨부 컨텍스트를 제거한 후 다시 시도하세요.',
   'chat.textSelection.actions.addToNotes': '메모에 추가',
   'chat.textSelection.title.addToCurrentChat': '현재 채팅에 추가',
   'chat.textSelection.title.saveInsightToNotes': '선택한 텍스트를 메모에 저장',
@@ -2935,6 +2938,9 @@ export const dict: Record<I18nKey, string> = {
   'desktopHostSwitcher.error.failedToSave': '저장에 실패했습니다',
   'desktopHostSwitcher.error.failedToLoad': '불러오기에 실패했습니다',
   'desktopHostSwitcher.error.invalidUrl': '유효하지 않은 URL(http/https 필요)',
+  'desktopHostSwitcher.error.pairingRejected': '페어링 링크가 유효하지 않거나 만료되었습니다. 새 링크를 생성하세요.',
+  'desktopHostSwitcher.error.pairingFailed': '페어링에 실패했습니다(HTTP {status}).',
+  'desktopHostSwitcher.error.pairingInvalidResponse': '서버가 유효하지 않은 페어링 응답을 반환했습니다.',
   'desktopHostSwitcher.error.failedToOpenNewWindow': '새 창 열기에 실패했습니다',
   'desktopHostSwitcher.instance.local': '로컬',
   'desktopHostSwitcher.instance.fallback': '인스턴스',
@@ -3090,6 +3096,9 @@ export const dict: Record<I18nKey, string> = {
   'onboarding.desktopRecovery.actions.retrying': '다시 시도 중…',
   'onboarding.desktopRecovery.actions.retryConnection': '연결 다시 시도',
   'startup.initRecovery.title': '시작 실패',
+  'startup.initRecovery.openCodeUnavailable': 'OpenChamber에 연결할 수 있지만 OpenCode가 준비되지 않았습니다. 서버의 OpenCode를 확인한 후 다시 시도하세요.',
+  'startup.initRecovery.binary': 'OpenCode 실행 파일',
+  'startup.initRecovery.error': 'OpenCode 오류',
   'startup.initRecovery.description': 'OpenChamber 초기화를 완료할 수 없습니다. 서버가 실행 중인지 확인한 뒤 다시 시도하세요.',
   'startup.initRecovery.retry': '다시 시도',
   'startup.initRecovery.retrying': '다시 시도 중…',

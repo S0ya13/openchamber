@@ -3,6 +3,7 @@ import { linearIssuePickerI18n } from './linear-issue-picker.i18n';
 import { linearPanelI18n } from './linear-panel.i18n';
 import { routingI18n } from './routing.i18n';
 import { pluginPanelI18n } from './plugin-panel.i18n';
+import { surfacePanelI18n } from './surface-panel.i18n';
 
 export const dict = {
   'sessions.aiRename.action': 'Yapay zekâ ile yeniden adlandır',
@@ -36,6 +37,7 @@ export const dict = {
   ...linearPanelI18n.tr,
   ...routingI18n.tr,
   ...pluginPanelI18n.tr,
+  ...surfacePanelI18n.tr,
   'terminalView.actions.attachSelection': 'Seçili çıktıyı ekle',
   'terminalView.actions.copySelection': 'Seçili çıktıyı kopyala',
   'terminalView.toast.selectionCopied': 'Çıktı kopyalandı',
@@ -2858,6 +2860,9 @@ export const dict = {
   'desktopHostSwitcher.error.failedToSave': 'Kaydedilemedi',
   'desktopHostSwitcher.error.failedToLoad': 'Yüklenemedi',
   'desktopHostSwitcher.error.invalidUrl': 'Geçersiz URL (http/https olmalı)',
+  'desktopHostSwitcher.error.pairingRejected': 'Eşleştirme bağlantısı geçersiz veya süresi dolmuş. Yeni bir bağlantı oluşturun.',
+  'desktopHostSwitcher.error.pairingFailed': 'Eşleştirme başarısız oldu (HTTP {status}).',
+  'desktopHostSwitcher.error.pairingInvalidResponse': 'Sunucu geçersiz bir eşleştirme yanıtı döndürdü.',
   'desktopHostSwitcher.error.failedToOpenNewWindow': 'Yeni pencere açılamadı',
   'desktopHostSwitcher.instance.local': 'Yerel',
   'desktopHostSwitcher.instance.fallback': 'Instance',
@@ -3013,6 +3018,9 @@ export const dict = {
   'onboarding.desktopRecovery.actions.retrying': 'Yeniden deneniyor…',
   'onboarding.desktopRecovery.actions.retryConnection': 'Bağlantıyı Yeniden Dene',
   'startup.initRecovery.title': 'Başlatma başarısız oldu',
+  'startup.initRecovery.openCodeUnavailable': 'OpenChamber erişilebilir, ancak OpenCode hazır değil. Sunucudaki OpenCode’u kontrol edip yeniden deneyin.',
+  'startup.initRecovery.binary': 'OpenCode çalıştırılabilir dosyası',
+  'startup.initRecovery.error': 'OpenCode hatası',
   'startup.initRecovery.description': 'OpenChamber başlatmayı tamamlayamadı. Sunucunun çalıştığından emin olun, ardından yeniden deneyin.',
   'startup.initRecovery.retry': 'Yeniden dene',
   'startup.initRecovery.retrying': 'Yeniden deneniyor…',
@@ -3370,6 +3378,7 @@ export const dict = {
   'chat.textSelection.title.commentOnSelection': 'Seçime yorum yap',
   'chat.textSelection.comment.placeholder': 'İsteğe bağlı bir yorum ekleyin...',
   'chat.textSelection.comment.attach': 'Ekle',
+  'chat.textSelection.comment.attachFailed': 'Yorum eklenemedi. Yorumu kısaltın veya ekli diğer bağlamı kaldırıp tekrar deneyin.',
   'commandPalette.item.cycleTheme': 'Temayı değiştir',
   'commandPalette.item.showOpenCodeStatus': 'OpenCode durumunu göster',
   'commandPalette.item.toggleMemoryDebug': 'Memory debug panelini aç/kapat',

@@ -63,6 +63,7 @@ import { useProviderLogo } from '@/hooks/useProviderLogo';
 import { useAgentColors } from '@/hooks/useAgentColors';
 import { isCapacitorMobileApp } from '@/apps/mobileNativeChrome';
 import { WorktreeRequiresGitRepositoryError } from '@/lib/worktrees/worktreeCreate';
+import { cloneMessageImageExportSource } from './imageExport';
 
 
 const CONTAIN_LAYOUT_STYLE = { contain: 'layout' as const, transform: 'translateZ(0)' };
@@ -1457,7 +1458,7 @@ const AssistantMessageBody = React.memo(({
                     display: inline-block;
                 `;
 
-                const clone = originalElement.cloneNode(true) as HTMLElement;
+                const clone = cloneMessageImageExportSource(originalElement);
                 clone.style.cssText = `
                     ${computedStyle.cssText}
                     transform: none;

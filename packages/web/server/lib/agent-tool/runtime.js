@@ -218,9 +218,9 @@ const createToolEntry = ({ name, description, definitions, parameters }) => Stri
               authorization: "Bearer " + token,
               "content-type": "application/json",
             },
-            // OpenCode 2 no longer hands a tool its session directory, so the
-            // session id goes over instead and OpenChamber resolves the
-            // directory on its own side.
+            // OpenCode 2 no longer hands a tool its session directory (nor an
+            // abort signal), so the session id goes over instead and
+            // OpenChamber resolves the directory on its own side.
             body: JSON.stringify({ input: args, sessionID: context.sessionID, tool: ${JSON.stringify(name)} }),
           })
           const content = await response.text()
@@ -404,7 +404,11 @@ export const createAgentToolRuntime = (dependencies) => {
         .catch(() => undefined);
     }
     try {
-      const data = await executeAction(action, { ...payload.input, action }, contextDirectory, options);
+      // The calling session scopes browser actions to that session's page.
+      const contextSessionId = asNonEmptyString(payload.contextSessionId) ?? sessionID;
+      const data = await executeAction(action, { ...payload.input, action }, contextDirectory, contextSessionId
+        ? { ...options, contextSessionId }
+        : options);
       return createResult({ ok: true, action, data });
     } catch (error) {
       return createResult({
